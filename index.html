@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PROSPORT — Tienda de Ropa Deportiva</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <button class="burger" id="burger" aria-label="Abrir menú">
+      <span></span><span></span><span></span>
+    </button>
+
+    <a href="#inicio" class="logo">PRO<span>SPORT</span></a>
+
+    <nav class="main-nav" id="mainNav">
+      <a href="#camisetas">Camisetas</a>
+      <a href="#pantalones">Pantalones</a>
+      <a href="#zapatillas">Zapatillas</a>
+      <a href="#futbol">Equip. Fútbol</a>
+      <a href="#baloncesto">Equip. Baloncesto</a>
+    </nav>
+
+    <div class="header-actions">
+      <button class="cart-btn" id="cartBtn">
+        🛒 <span class="cart-count" id="cartCount">0</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<section class="hero" id="inicio">
+  <div class="hero-content">
+    <p class="hero-tag">Nueva temporada 2026</p>
+    <h1>Equípate para <span>ganar</span></h1>
+    <p class="hero-sub">Camisetas, pantalones, zapatillas y equipaciones oficiales de fútbol y baloncesto, todo en un mismo sitio.</p>
+    <div class="hero-btns">
+      <a href="#camisetas" class="btn btn-primary">Ver ropa</a>
+      <a href="#futbol" class="btn btn-outline">Ver equipaciones</a>
+    </div>
+  </div>
+</section>
+
+<nav class="category-strip">
+  <a href="#camisetas">👕 Camisetas</a>
+  <a href="#pantalones">👖 Pantalones</a>
+  <a href="#zapatillas">👟 Zapatillas</a>
+  <a href="#futbol">⚽ Fútbol</a>
+  <a href="#baloncesto">🏀 Baloncesto</a>
+</nav>
+
+<main>
+
+  <section class="product-section" id="camisetas">
+    <div class="section-head">
+      <h2>Camisetas</h2>
+      <p>Rendimiento y estilo para entrenar o para el día a día.</p>
+    </div>
+    <div class="product-grid" data-category="camisetas"></div>
+  </section>
+
+  <section class="product-section alt" id="pantalones">
+    <div class="section-head">
+      <h2>Pantalones</h2>
+      <p>Mallas, joggers y shorts técnicos para cada deporte.</p>
+    </div>
+    <div class="product-grid" data-category="pantalones"></div>
+  </section>
+
+  <section class="product-section" id="zapatillas">
+    <div class="section-head">
+      <h2>Zapatillas</h2>
+      <p>Running, entrenamiento y calle. Comodidad en cada paso.</p>
+    </div>
+    <div class="product-grid" data-category="zapatillas"></div>
+  </section>
+
+  <section class="product-section kits" id="futbol">
+    <div class="section-head">
+      <h2>⚽ Equipaciones de Fútbol</h2>
+      <p>Camiseta, pantalón y medias de tus equipos y selecciones favoritas.</p>
+    </div>
+    <div class="product-grid" data-category="futbol"></div>
+  </section>
+
+  <section class="product-section kits alt" id="baloncesto">
+    <div class="section-head">
+      <h2>🏀 Equipaciones de Baloncesto</h2>
+      <p>Camisetas y shorts oficiales para dominar la cancha.</p>
+    </div>
+    <div class="product-grid" data-category="baloncesto"></div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <a href="#inicio" class="logo">PRO<span>SPORT</span></a>
+      <p>Tu tienda de ropa y equipaciones deportivas.</p>
+    </div>
+    <div class="footer-cols">
+      <div>
+        <h4>Ropa</h4>
+        <a href="#camisetas">Camisetas</a>
+        <a href="#pantalones">Pantalones</a>
+        <a href="#zapatillas">Zapatillas</a>
+      </div>
+      <div>
+        <h4>Equipaciones</h4>
+        <a href="#futbol">Fútbol</a>
+        <a href="#baloncesto">Baloncesto</a>
+      </div>
+      <div>
+        <h4>Ayuda</h4>
+        <a href="#">Envíos</a>
+        <a href="#">Devoluciones</a>
+        <a href="#">Contacto</a>
+      </div>
+    </div>
+  </div>
+  <p class="footer-bottom">© 2026 PROSPORT. Sitio de demostración.</p>
+</footer>
+
+<div class="cart-overlay" id="cartOverlay"></div>
+<aside class="cart-drawer" id="cartDrawer">
+  <div class="cart-drawer-head">
+    <h3>Tu carrito</h3>
+    <button id="closeCart" aria-label="Cerrar carrito">✕</button>
+  </div>
+  <div class="cart-items" id="cartItems"></div>
+  <div class="cart-footer">
+    <div class="cart-total">
+      <span>Total</span>
+      <span id="cartTotal">0,00 €</span>
+    </div>
+    <button class="btn btn-primary btn-block" id="checkoutBtn">Finalizar compra</button>
+  </div>
+</aside>
+
+<script src="script.js"></script>
+</body>
+</html>
