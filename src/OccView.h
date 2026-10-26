@@ -5,6 +5,7 @@
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_ViewController.hxx>
 #include <NCollection_Sequence.hxx>
+#include <TopoDS_Shape.hxx>
 #include <V3d_View.hxx>
 #include <V3d_Viewer.hxx>
 
@@ -24,8 +25,10 @@ public:
 
   const Handle(AIS_InteractiveContext)& Context() const { return myContext; }
 
-  // Muestra el boceto (contorno y cotas) en lugar del anterior y lo mira desde arriba.
+  // Muestra el boceto (contorno y cotas) en lugar del modelo anterior y lo mira desde arriba.
   void ShowSketch(const Sketch& sketch);
+  // Muestra la pieza sólida en lugar del modelo anterior, en vista isométrica.
+  void ShowPart(const TopoDS_Shape& part);
 
 protected:
   void paintEvent(QPaintEvent* event) override;
@@ -40,11 +43,12 @@ protected:
 
 private:
   void initViewer();
+  void clearModel();
   void flushEvents();
   Graphic3d_Vec2i toViewPoint(const QPointF& pos) const;
 
   Handle(V3d_Viewer) myViewer;
   Handle(V3d_View) myView;
   Handle(AIS_InteractiveContext) myContext;
-  NCollection_Sequence<Handle(AIS_InteractiveObject)> mySketchObjects;
+  NCollection_Sequence<Handle(AIS_InteractiveObject)> myModelObjects;
 };

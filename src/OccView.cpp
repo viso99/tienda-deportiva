@@ -87,19 +87,14 @@ void OccView::initViewer()
 
 void OccView::ShowSketch(const Sketch& sketch)
 {
-  if (myView.IsNull())
-    initViewer();
-
-  for (const Handle(AIS_InteractiveObject)& object : mySketchObjects)
-    myContext->Remove(object, Standard_False);
-  mySketchObjects.Clear();
+  clearModel();
 
   if (sketch.HasProfile())
   {
     Handle(AIS_Shape) outline = new AIS_Shape(sketch.Wire());
     outline->SetColor(Quantity_NOC_DEEPSKYBLUE1);
     outline->SetWidth(2.0);
-    mySketchObjects.Append(outline);
+    myModelObjects.Append(outline);
 
     // Flechas proporcionales al boceto, para que no tapen piezas chicas.
     Handle(Prs3d_DimensionAspect) dimAspect = new Prs3d_DimensionAspect();
@@ -112,21 +107,50 @@ void OccView::ShowSketch(const Sketch& sketch)
         new PrsDim_LengthDimension(sketch.WidthEdge(), sketchPlane);
     widthDim->SetDimensionAspect(dimAspect);
     widthDim->SetFlyout(-0.25 * sketch.Height() - 5.0);
-    mySketchObjects.Append(widthDim);
+    myModelObjects.Append(widthDim);
 
     Handle(PrsDim_LengthDimension) heightDim =
         new PrsDim_LengthDimension(sketch.HeightEdge(), sketchPlane);
     heightDim->SetDimensionAspect(dimAspect);
     heightDim->SetFlyout(-0.25 * sketch.Width() - 5.0);
-    mySketchObjects.Append(heightDim);
+    myModelObjects.Append(heightDim);
 
-    for (const Handle(AIS_InteractiveObject)& object : mySketchObjects)
+    for (const Handle(AIS_InteractiveObject)& object : myModelObjects)
       myContext->Display(object, Standard_False);
   }
 
   myView->SetProj(V3d_Zpos);
   myView->FitAll(0.3, Standard_False);
   update();
+}
+
+void OccView::ShowPart(const TopoDS_Shape& part)
+{
+  clearModel();
+
+  Handle(AIS_Shape) solid = new AIS_Shape(part);
+  solid->SetDisplayMode(AIS_Shaded);
+  solid->SetMaterial(Graphic3d_NameOfMaterial_Steel);
+  solid->SetColor(Quantity_NOC_LIGHTSTEELBLUE);
+  // Aristas visibles sobre las caras, como en SolidWorks ("sombreado con aristas").
+  solid->Attributes()->SetFaceBoundaryDraw(Standard_True);
+  solid->Attributes()->FaceBoundaryAspect()->SetColor(Quantity_NOC_BLACK);
+  myModelObjects.Append(solid);
+  myContext->Display(solid, Standard_False);
+
+  myView->SetProj(V3d_XposYnegZpos);
+  myView->FitAll(0.3, Standard_False);
+  update();
+}
+
+void OccView::clearModel()
+{
+  if (myView.IsNull())
+    initViewer();
+
+  for (const Handle(AIS_InteractiveObject)& object : myModelObjects)
+    myContext->Remove(object, Standard_False);
+  myModelObjects.Clear();
 }
 
 void OccView::paintEvent(QPaintEvent*)

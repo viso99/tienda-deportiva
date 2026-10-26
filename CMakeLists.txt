@@ -9,6 +9,8 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets)
 find_package(OpenCASCADE REQUIRED)
 
 add_executable(CadApp WIN32
+  src/Extrude.cpp
+  src/Extrude.h
   src/main.cpp
   src/MainWindow.cpp
   src/MainWindow.h
