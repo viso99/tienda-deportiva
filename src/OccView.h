@@ -24,7 +24,9 @@ enum class SketchTool
 {
   None,
   Line,      // contorno de líneas, clic a clic
+  Arc,       // como Línea, pero cada lado es un arco por tres puntos; se mezclan en un mismo contorno
   Rectangle, // rectángulo por dos esquinas opuestas
+  Circle,    // círculo por centro y un punto del borde
 };
 
 // Vista 3D de Open CASCADE incrustada en un widget de Qt.
@@ -58,9 +60,13 @@ public:
   // Con la pieza mostrada (ShowPart), espera un clic en una cara plana y emite facePicked
   // con su plano de boceto. Se puede girar la vista arrastrando. Esc emite toolCanceled.
   void StartFacePick();
+  // True mientras se dibuja un contorno con Línea o Arco y ya hay puntos marcados.
+  bool IsDrawingChain() const;
+  // Pasa de Línea a Arco (o al revés) sin perder lo dibujado: el próximo lado usa la nueva.
+  void SwitchChainTool(SketchTool tool);
 
 signals:
-  void profileFinished(const std::vector<gp_Pnt2d>& points);
+  void profileFinished(const Sketch& profile);
   void toolCanceled();
   void facePicked(const gp_Ax3& plane);
   // Doble clic en la cota del lado `edgeIndex` del boceto mostrado.
@@ -92,7 +98,9 @@ private:
   std::optional<gp_Pnt2d> pickOnSketchPlane(const Graphic3d_Vec2i& pixel) const;
   bool isNearFirstPoint(const Graphic3d_Vec2i& pixel) const;
   void addToolPoint(const Graphic3d_Vec2i& pixel);
-  void finishProfile(const std::vector<gp_Pnt2d>& points);
+  void addChainPoint(const gp_Pnt2d& point, bool nearFirst);
+  void finishProfile(const Sketch& profile);
+  void finishChain(const std::vector<double>& bulges);
   void endTool();
   void endFacePick();
   void pickFace(const Graphic3d_Vec2i& pixel);
@@ -114,6 +122,9 @@ private:
   SketchTool myTool = SketchTool::None;
   gp_Ax3 mySketchPlane;                    // plano donde se dibuja
   std::vector<gp_Pnt2d> myToolPoints;     // puntos ya marcados
+  std::vector<double> myToolBulges;       // en Línea y Arco, el bulge de cada lado ya dibujado
+  std::optional<gp_Pnt2d> myArcEnd;       // en Arco, el extremo ya elegido (falta el punto de paso)
+  bool myArcCloses = false;               // el extremo del arco es el primer punto: cierra el contorno
   std::optional<gp_Pnt2d> myCursorPoint;  // posición del mouse sobre el plano, ajustada al mm
   QString myToolError;                    // aviso del último clic rechazado
   NCollection_Sequence<Handle(AIS_InteractiveObject)> myPreviewObjects;

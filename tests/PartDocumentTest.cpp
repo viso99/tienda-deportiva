@@ -284,6 +284,120 @@ int main()
     check(!LoadPart(badPath, &untouched, &error), "rechaza operaciones sin extrusión");
   }
 
+  // Arcos y círculos.
+  {
+    const double pi = std::acos(-1.0);
+    check(Sketch::ArcMiddle(gp_Pnt2d(0, 0), gp_Pnt2d(10, 0), 1.0).IsEqual(gp_Pnt2d(5, -5), 1e-9),
+          "con bulge 1, el arco es media vuelta a la derecha del lado");
+    const std::optional<double> right = Sketch::BulgeThrough(gp_Pnt2d(0, 0), gp_Pnt2d(10, 0), gp_Pnt2d(5, -5));
+    const std::optional<double> left = Sketch::BulgeThrough(gp_Pnt2d(0, 0), gp_Pnt2d(10, 0), gp_Pnt2d(5, 5));
+    check(right && std::abs(*right - 1.0) < 1e-9 && left && std::abs(*left + 1.0) < 1e-9,
+          "el bulge por tres puntos tiene el signo del lado del punto de paso");
+    const std::optional<double> shallow = Sketch::BulgeThrough(gp_Pnt2d(0, 0), gp_Pnt2d(10, 0), gp_Pnt2d(1, -3));
+    check(shallow && Sketch::ArcMiddle(gp_Pnt2d(0, 0), gp_Pnt2d(10, 0), *shallow).Distance(gp_Pnt2d(5, 0)) > 0.0,
+          "un punto de paso que no es el medio también da un arco");
+    check(!Sketch::BulgeThrough(gp_Pnt2d(0, 0), gp_Pnt2d(10, 0), gp_Pnt2d(20, 0)),
+          "tres puntos alineados no forman un arco");
+
+    check(Sketch::IsValidProfile({gp_Pnt2d(0, 0), gp_Pnt2d(10, 0)}, {0.0, 1.0}),
+          "una línea y un arco cierran un contorno (una D)");
+    check(!Sketch::IsValidProfile({gp_Pnt2d(0, 0), gp_Pnt2d(10, 0), gp_Pnt2d(10, 3), gp_Pnt2d(0, 3)},
+                                  {-1.0, 0.0, 0.0, 0.0}),
+          "rechaza un arco que cruza el lado de enfrente");
+    check(!Sketch::IsValidProfile({gp_Pnt2d(0, 0), gp_Pnt2d(10, 0)}, {0.0}),
+          "rechaza bulges que no coinciden con los lados");
+
+    Sketch circle;
+    check(circle.SetCircle(gp_Pnt2d(20, 10), 5.0) && circle.IsCircle(), "dibuja un círculo");
+    check(std::abs(circle.Width() - 10.0) < 1e-9 && std::abs(circle.Height() - 10.0) < 1e-9,
+          "el círculo de radio 5 ocupa 10 × 10");
+    check(circle.DimensionedEdges().size() == 1 && circle.DimensionedEdges()[0].kind == Sketch::DimensionKind::Diameter
+              && std::abs(circle.DimensionValue(0) - 10.0) < 1e-9,
+          "el círculo lleva una cota de diámetro");
+    check(circle.SetDimensionValue(0, 16.0) && std::abs(circle.CircleRadius() - 8.0) < 1e-9
+              && circle.CircleCenter().IsEqual(gp_Pnt2d(20, 10), 1e-9),
+          "cambiar el diámetro deja fijo el centro");
+    check(!circle.SetCircle(gp_Pnt2d(0, 0), 0.0), "rechaza un círculo de radio cero");
+
+    Part cylinder;
+    cylinder.sketch.SetCircle(gp_Pnt2d(0, 0), 5.0);
+    cylinder.extrudeDepth = 10.0;
+    check(std::abs(volumeOf(BuildPart(cylinder)) - pi * 25.0 * 10.0) < 1e-6, "un círculo extruido es un cilindro");
+
+    // Ranura: rectángulo de 20 × 10 con los lados cortos en media vuelta hacia afuera.
+    Sketch slot;
+    check(slot.SetProfile({gp_Pnt2d(0, 0), gp_Pnt2d(20, 0), gp_Pnt2d(20, 10), gp_Pnt2d(0, 10)}, {0.0, 1.0, 0.0, 1.0}),
+          "dibuja una ranura");
+    check(!slot.IsRectangle() && !slot.IsCircle() && slot.HasArcs(), "la ranura no es rectángulo ni círculo");
+    check(std::abs(slot.Width() - 30.0) < 1e-9 && std::abs(slot.Height() - 10.0) < 1e-9,
+          "la caja de la ranura incluye los arcos");
+    const std::vector<Sketch::DimensionedEdge> slotDimensions = slot.DimensionedEdges();
+    check(slotDimensions.size() == 4 && slotDimensions[0].kind == Sketch::DimensionKind::Length
+              && slotDimensions[1].kind == Sketch::DimensionKind::Radius && std::abs(slot.DimensionValue(1) - 5.0) < 1e-9,
+          "la ranura lleva largo en los lados rectos y radio en los arcos");
+
+    Part slotPart;
+    slotPart.sketch = slot;
+    slotPart.extrudeDepth = 10.0;
+    check(std::abs(volumeOf(BuildPart(slotPart)) - (200.0 + pi * 25.0) * 10.0) < 1e-6,
+          "la ranura extruida tiene el volumen esperado");
+
+    Sketch wider = slot;
+    check(wider.SetEdgeLength(0, 30.0) && wider.Points()[2].IsEqual(gp_Pnt2d(30, 10), 1e-9)
+              && std::abs(wider.Width() - 40.0) < 1e-9 && std::abs(wider.ArcRadius(1) - 5.0) < 1e-9,
+          "alargar el lado recto de la ranura arrastra el arco");
+    check(!wider.SetEdgeLength(1, 20.0), "el largo de un arco no se cambia como un lado recto");
+    Sketch flatter = slot;
+    check(flatter.SetArcRadius(1, 10.0) && std::abs(flatter.ArcRadius(1) - 10.0) < 1e-9
+              && flatter.Points()[1].IsEqual(gp_Pnt2d(20, 0), 0.0) && flatter.Points()[2].IsEqual(gp_Pnt2d(20, 10), 0.0)
+              && std::abs(flatter.Width() - (25.0 + 10.0 - std::sqrt(75.0))) < 1e-9,
+          "cambiar el radio de un arco deja fijos sus extremos");
+    check(!flatter.SetArcRadius(1, 4.0), "el radio no puede ser menor que media cuerda");
+
+    // Agujero redondo pasante en la cara de arriba de un bloque de 40 × 20 × 10.
+    Part block;
+    block.sketch.SetRectangle(40.0, 20.0);
+    block.extrudeDepth = 10.0;
+    const std::optional<gp_Ax3> top = facePlane(BuildPart(block), gp::DZ());
+    if (top)
+    {
+      Feature roundHole;
+      roundHole.kind = Feature::Kind::Cut;
+      roundHole.plane = *top;
+      roundHole.sketch.SetCircle(gp_Pnt2d(20, 10), 3.0);
+      roundHole.throughAll = true;
+      block.features.push_back(roundHole);
+      Feature roundBoss = roundHole;
+      roundBoss.kind = Feature::Kind::Boss;
+      roundBoss.throughAll = false;
+      roundBoss.depth = 5.0;
+      roundBoss.sketch = slot; // ranura de 30 × 10 sobre la cara, de x -5 a 25
+      roundBoss.sketch.SetEdgeLength(0, 10.0);
+      block.features.push_back(roundBoss);
+      std::vector<size_t> failed;
+      const double expected = 8000.0 - pi * 9.0 * 10.0 + (100.0 + pi * 25.0) * 5.0;
+      check(std::abs(volumeOf(BuildPart(block, &failed)) - expected) < 1e-6 && failed.empty(),
+            "un agujero redondo pasante y un saliente con arcos");
+
+      const QString roundPath = dir.filePath("redondos.cadp");
+      check(SavePart(block, roundPath, &error), "guarda una pieza con círculos y arcos");
+      Part reopened;
+      check(LoadPart(roundPath, &reopened, &error), "abre una pieza con círculos y arcos");
+      check(reopened.features.size() == 2 && reopened.features[0].sketch.IsCircle()
+                && std::abs(reopened.features[0].sketch.CircleRadius() - 3.0) < 1e-9
+                && reopened.features[1].sketch.Bulges() == roundBoss.sketch.Bulges(),
+            "los círculos y arcos se guardan tal cual");
+      check(std::abs(volumeOf(BuildPart(reopened)) - expected) < 1e-6, "la pieza con arcos abierta da el mismo sólido");
+      const QString roundStepPath = dir.filePath("redondos.step");
+      check(ExportStep(BuildPart(reopened), roundStepPath, &error), "exporta a STEP una pieza con arcos");
+    }
+
+    writeText(badPath, R"({"format":"cad-app-part","version":4,"sketch":{"type":"polygon","points":[[0,0],[10,0]],"bulges":[0]}})");
+    check(!LoadPart(badPath, &untouched, &error), "rechaza bulges que no coinciden con los vértices");
+    writeText(badPath, R"({"format":"cad-app-part","version":4,"sketch":{"type":"circle","center":[0,0],"radius":-1}})");
+    check(!LoadPart(badPath, &untouched, &error), "rechaza un círculo de radio negativo");
+  }
+
   // Las piezas del formato anterior (versión 1, rectángulo) se siguen abriendo.
   const QString v1Path = dir.filePath("v1.cadp");
   writeText(v1Path, R"({"format":"cad-app-part","version":1,"sketch":{"type":"rectangle","width":40,"height":20},"extrude":{"depth":10}})");

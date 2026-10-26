@@ -21,8 +21,9 @@ const char* const kFormatName = "cad-app-part";
 // Versión 1: el boceto es un rectángulo con una esquina en el origen (ancho y alto).
 // Versión 2: el boceto es un contorno cerrado (lista de vértices).
 // Versión 3: además, la lista de operaciones (agujeros, cortes y salientes).
+// Versión 4: los lados pueden ser arcos ("bulges" en el contorno) y hay círculos.
 // Se siguen abriendo todas.
-const int kFormatVersion = 3;
+const int kFormatVersion = 4;
 
 bool readPositive(const QJsonObject& object, const char* key, double* value)
 {
@@ -45,14 +46,29 @@ bool readRectangle(const QJsonObject& object, Sketch* sketch)
   return true;
 }
 
-QJsonObject writePolygon(const Sketch& sketch)
+QJsonObject writeProfile(const Sketch& sketch)
 {
+  QJsonObject object;
+  if (sketch.IsCircle())
+  {
+    object["type"] = "circle";
+    object["center"] = QJsonArray{sketch.CircleCenter().X(), sketch.CircleCenter().Y()};
+    object["radius"] = sketch.CircleRadius();
+    return object;
+  }
   QJsonArray points;
   for (const gp_Pnt2d& point : sketch.Points())
     points.append(QJsonArray{point.X(), point.Y()});
-  QJsonObject object;
   object["type"] = "polygon";
   object["points"] = points;
+  // Solo si hay arcos: un contorno de líneas se guarda igual que en la versión 2.
+  if (sketch.HasArcs())
+  {
+    QJsonArray bulges;
+    for (double bulge : sketch.Bulges())
+      bulges.append(bulge);
+    object["bulges"] = bulges;
+  }
   return object;
 }
 
@@ -84,13 +100,13 @@ QJsonObject writeFeature(const Feature& feature)
   QJsonObject object;
   object["type"] = feature.kind == Feature::Kind::Cut ? "cut" : "boss";
   object["plane"] = planeObject;
-  object["sketch"] = writePolygon(feature.sketch);
+  object["sketch"] = writeProfile(feature.sketch);
   object["depth"] = feature.depth;
   object["throughAll"] = feature.throughAll;
   return object;
 }
 
-bool readPolygon(const QJsonObject& object, Sketch* sketch);
+bool readProfile(const QJsonObject& object, Sketch* sketch);
 
 bool readFeature(const QJsonObject& object, Feature* feature)
 {
@@ -111,7 +127,7 @@ bool readFeature(const QJsonObject& object, Feature* feature)
     return false;
   feature->plane = gp_Ax3(gp_Pnt(origin), gp_Dir(normal), gp_Dir(xDirection));
 
-  if (!readPolygon(object.value("sketch").toObject(), &feature->sketch))
+  if (!readProfile(object.value("sketch").toObject(), &feature->sketch))
     return false;
 
   feature->throughAll = object.value("throughAll").toBool(false);
@@ -124,19 +140,49 @@ bool readFeature(const QJsonObject& object, Feature* feature)
   return true;
 }
 
-bool readPolygon(const QJsonObject& object, Sketch* sketch)
+bool readPoint(const QJsonValue& value, gp_Pnt2d* point)
 {
-  if (object.value("type").toString() != "polygon" || !object.value("points").isArray())
+  const QJsonArray pair = value.toArray();
+  if (pair.size() != 2 || !pair[0].isDouble() || !pair[1].isDouble())
+    return false;
+  point->SetCoord(pair[0].toDouble(), pair[1].toDouble());
+  return true;
+}
+
+bool readProfile(const QJsonObject& object, Sketch* sketch)
+{
+  const QString type = object.value("type").toString();
+  if (type == "circle")
+  {
+    gp_Pnt2d center;
+    double radius = 0.0;
+    return readPoint(object.value("center"), &center) && readPositive(object, "radius", &radius)
+        && sketch->SetCircle(center, radius);
+  }
+  if (type != "polygon" || !object.value("points").isArray())
     return false;
   std::vector<gp_Pnt2d> points;
   for (const QJsonValue& value : object.value("points").toArray())
   {
-    const QJsonArray pair = value.toArray();
-    if (pair.size() != 2 || !pair[0].isDouble() || !pair[1].isDouble())
+    gp_Pnt2d point;
+    if (!readPoint(value, &point))
       return false;
-    points.emplace_back(pair[0].toDouble(), pair[1].toDouble());
+    points.push_back(point);
   }
-  return sketch->SetPolygon(points);
+  std::vector<double> bulges(points.size(), 0.0);
+  if (object.contains("bulges"))
+  {
+    const QJsonArray array = object.value("bulges").toArray();
+    if (size_t(array.size()) != points.size())
+      return false;
+    for (int i = 0; i < array.size(); ++i)
+    {
+      if (!array[i].isDouble())
+        return false;
+      bulges[i] = array[i].toDouble();
+    }
+  }
+  return sketch->SetProfile(points, bulges);
 }
 } // namespace
 
@@ -147,7 +193,7 @@ bool SavePart(const Part& part, const QString& path, QString* error)
   root["version"] = kFormatVersion;
 
   if (part.sketch.HasProfile())
-    root["sketch"] = writePolygon(part.sketch);
+    root["sketch"] = writeProfile(part.sketch);
   if (part.extrudeDepth)
   {
     QJsonObject extrude;
@@ -213,7 +259,7 @@ bool LoadPart(const QString& path, Part* part, QString* error)
   {
     const QJsonObject sketch = root.value("sketch").toObject();
     const bool valid = version == 1 ? readRectangle(sketch, &loaded.sketch)
-                                    : readPolygon(sketch, &loaded.sketch);
+                                    : readProfile(sketch, &loaded.sketch);
     if (!valid)
     {
       *error = "El boceto guardado no es válido.";

@@ -30,12 +30,12 @@ private:
 
   void drawRectangle();
   void startSketchTool(SketchTool tool);
-  void setProfile(const std::vector<gp_Pnt2d>& points);
+  void setProfile(const Sketch& profile);
   void editDimension(size_t edgeIndex);
   void extrude();
   void startFeature(Feature::Kind kind);
   void sketchOnFace(const gp_Ax3& plane);
-  void addFeature(const std::vector<gp_Pnt2d>& points);
+  void addFeature(const Sketch& profile);
   void removeLastFeature();
   void cancelTool();
 
