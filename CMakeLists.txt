@@ -21,6 +21,8 @@ add_library(CadCore STATIC
   src/Extrude.h
   src/Format.cpp
   src/Format.h
+  src/History.cpp
+  src/History.h
   src/Part.cpp
   src/Part.h
   src/PartDocument.cpp

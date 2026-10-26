@@ -33,6 +33,8 @@ MainWindow::MainWindow(QWidget* parent)
     myCutAction(new QAction("Agujero o corte…", this)),
     myBossAction(new QAction("Saliente…", this)),
     myRemoveFeatureAction(new QAction("Quitar última operación", this)),
+    myUndoAction(new QAction("Deshacer", this)),
+    myRedoAction(new QAction("Rehacer", this)),
     myStatusLabel(new QLabel(this))
 {
   setCentralWidget(myView);
@@ -51,6 +53,20 @@ MainWindow::MainWindow(QWidget* parent)
   fileMenu->addAction(myExportStepAction);
   fileMenu->addSeparator();
   fileMenu->addAction("Salir", QKeySequence::Quit, this, &QWidget::close);
+
+  QMenu* editMenu = menuBar()->addMenu("Edición");
+  myUndoAction->setShortcut(QKeySequence::Undo);
+  // En el menú dice qué se deshace ("Deshacer extrusión"); en la barra, solo "Deshacer".
+  myUndoAction->setIconText("Deshacer");
+  myRedoAction->setIconText("Rehacer");
+  myUndoAction->setStatusTip("Volver atrás el último cambio de la pieza");
+  connect(myUndoAction, &QAction::triggered, this, &MainWindow::undo);
+  editMenu->addAction(myUndoAction);
+  // Ctrl+Y es lo habitual en Windows; Ctrl+Mayús+Z, en otros programas.
+  myRedoAction->setShortcuts({QKeySequence(Qt::CTRL | Qt::Key_Y), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Z)});
+  myRedoAction->setStatusTip("Volver a hacer el último cambio deshecho");
+  connect(myRedoAction, &QAction::triggered, this, &MainWindow::redo);
+  editMenu->addAction(myRedoAction);
 
   QAction* lineAction = new QAction("Línea", this);
   lineAction->setShortcut(Qt::Key_L);
@@ -117,6 +133,9 @@ MainWindow::MainWindow(QWidget* parent)
   operationsMenu->addSeparator();
   operationsMenu->addAction(myRemoveFeatureAction);
   QToolBar* toolBar = addToolBar("Herramientas");
+  toolBar->addAction(myUndoAction);
+  toolBar->addAction(myRedoAction);
+  toolBar->addSeparator();
   toolBar->addAction(lineAction);
   toolBar->addAction(arcAction);
   toolBar->addAction(mouseRectangleAction);
@@ -217,7 +236,7 @@ void MainWindow::drawRectangle()
     return;
 
   myPart.sketch.SetRectangle(dialog.Width(), dialog.Height());
-  markModified();
+  markModified("rectángulo");
   showModel();
 }
 
@@ -293,7 +312,7 @@ void MainWindow::addFeature(const Sketch& profile)
     return;
   }
   myPart = candidate;
-  markModified();
+  markModified(isCut ? "agujero o corte" : "saliente");
   showModel();
 }
 
@@ -302,7 +321,7 @@ void MainWindow::removeLastFeature()
   if (myPart.features.empty())
     return;
   myPart.features.pop_back();
-  markModified();
+  markModified("quitar operación");
   showModel();
 }
 
@@ -314,7 +333,7 @@ void MainWindow::setProfile(const Sketch& profile)
     return;
   }
   myPart.sketch = profile;
-  markModified();
+  markModified("boceto");
   showModel();
 }
 
@@ -340,7 +359,7 @@ void MainWindow::editDimension(size_t edgeIndex)
                              : QString("Con esa medida el contorno se cruzaría consigo mismo. Probá con otra."));
     return;
   }
-  markModified();
+  markModified("cambio de cota");
   showModel();
 }
 
@@ -355,7 +374,7 @@ void MainWindow::extrude()
 
   myPart.extrudeDepth = depth;
   myEditSketchAction->setChecked(false);
-  markModified();
+  markModified("extrusión");
   showModel();
 }
 
@@ -364,22 +383,53 @@ void MainWindow::setPart(const Part& part, const QString& filePath)
   myPart = part;
   myFilePath = filePath;
   myEditSketchAction->setChecked(false);
-  myModified = false;
+  myHistory.Reset(part);
   updateActions();
   updateTitle();
   showModel();
 }
 
-void MainWindow::markModified()
+void MainWindow::markModified(const QString& what)
 {
-  myModified = true;
+  myHistory.Commit(myPart, what);
   updateActions();
   updateTitle();
 }
 
+void MainWindow::undo()
+{
+  // A mitad de un dibujo, Ctrl+Z borra el último punto en lugar de deshacer el cambio anterior.
+  if (myView->RemoveLastToolPoint())
+    return;
+  if (!myHistory.CanUndo())
+    return;
+  const QString what = myHistory.UndoText();
+  restore(myHistory.Undo(), QString("Deshecho: %1").arg(what));
+}
+
+void MainWindow::redo()
+{
+  if (!myHistory.CanRedo())
+    return;
+  const QString what = myHistory.RedoText();
+  restore(myHistory.Redo(), QString("Rehecho: %1").arg(what));
+}
+
+void MainWindow::restore(const Part& part, const QString& message)
+{
+  myPart = part;
+  // Sin extrusión no hay pieza que editar: se vuelve a mostrar el boceto.
+  if (!myPart.extrudeDepth)
+    myEditSketchAction->setChecked(false);
+  updateActions();
+  updateTitle();
+  showModel(); // también cancela lo que se estuviera dibujando
+  showStatus(message + " · " + myStatusLabel->text());
+}
+
 bool MainWindow::confirmDiscardChanges()
 {
-  if (!myModified)
+  if (!myHistory.IsModified())
     return true;
 
   const QMessageBox::StandardButton answer = QMessageBox::question(
@@ -399,7 +449,7 @@ bool MainWindow::writeTo(const QString& filePath)
     return false;
   }
   myFilePath = filePath;
-  myModified = false;
+  myHistory.MarkSaved();
   updateTitle();
   showStatus(QString("Guardado en %1").arg(QFileInfo(filePath).fileName()));
   return true;
@@ -413,12 +463,16 @@ void MainWindow::updateActions()
   myCutAction->setEnabled(myPart.extrudeDepth.has_value());
   myBossAction->setEnabled(myPart.extrudeDepth.has_value());
   myRemoveFeatureAction->setEnabled(!myPart.features.empty());
+  myUndoAction->setEnabled(myHistory.CanUndo());
+  myUndoAction->setText(myHistory.CanUndo() ? QString("Deshacer %1").arg(myHistory.UndoText()) : QString("Deshacer"));
+  myRedoAction->setEnabled(myHistory.CanRedo());
+  myRedoAction->setText(myHistory.CanRedo() ? QString("Rehacer %1").arg(myHistory.RedoText()) : QString("Rehacer"));
 }
 
 void MainWindow::updateTitle()
 {
   const QString name = myFilePath.isEmpty() ? "Sin título" : QFileInfo(myFilePath).fileName();
-  setWindowTitle(QString("%1%2 - Diseño CAD").arg(name, myModified ? "*" : ""));
+  setWindowTitle(QString("%1%2 - Diseño CAD").arg(name, myHistory.IsModified() ? "*" : ""));
 }
 
 void MainWindow::showModel()

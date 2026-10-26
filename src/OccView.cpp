@@ -288,6 +288,29 @@ void OccView::StartFacePick()
   update();
 }
 
+bool OccView::RemoveLastToolPoint()
+{
+  if (myTool == SketchTool::None || (!myArcEnd && myToolPoints.empty()))
+    return false;
+  if (myArcEnd)
+  {
+    // Primero se descarta el extremo del arco que espera su punto de paso.
+    myArcEnd.reset();
+    myArcCloses = false;
+  }
+  else
+  {
+    myToolPoints.pop_back();
+    if (!myToolBulges.empty())
+      myToolBulges.pop_back();
+  }
+  myToolError.clear();
+  updatePreview();
+  updateHint();
+  update();
+  return true;
+}
+
 bool OccView::IsDrawingChain() const
 {
   return (myTool == SketchTool::Line || myTool == SketchTool::Arc) && !myToolPoints.empty();
@@ -472,22 +495,7 @@ void OccView::keyPressEvent(QKeyEvent* event)
       emit toolCanceled();
       break;
     case Qt::Key_Backspace:
-      if (myArcEnd)
-      {
-        // Primero se descarta el extremo del arco que espera su punto de paso.
-        myArcEnd.reset();
-        myArcCloses = false;
-      }
-      else if (!myToolPoints.empty())
-      {
-        myToolPoints.pop_back();
-        if (!myToolBulges.empty())
-          myToolBulges.pop_back();
-      }
-      myToolError.clear();
-      updatePreview();
-      updateHint();
-      update();
+      RemoveLastToolPoint();
       break;
     case Qt::Key_Return:
     case Qt::Key_Enter:

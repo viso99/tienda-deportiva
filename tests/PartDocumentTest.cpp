@@ -3,6 +3,7 @@
 
 #include "Extrude.h"
 #include "Format.h"
+#include "History.h"
 #include "PartDocument.h"
 
 #include <QFile>
@@ -396,6 +397,54 @@ int main()
     check(!LoadPart(badPath, &untouched, &error), "rechaza bulges que no coinciden con los vértices");
     writeText(badPath, R"({"format":"cad-app-part","version":4,"sketch":{"type":"circle","center":[0,0],"radius":-1}})");
     check(!LoadPart(badPath, &untouched, &error), "rechaza un círculo de radio negativo");
+  }
+
+  // Historial para deshacer y rehacer.
+  {
+    History history;
+    check(!history.CanUndo() && !history.CanRedo() && !history.IsModified(), "el historial empieza vacío y sin cambios");
+
+    Part step = history.Current();
+    step.sketch.SetRectangle(40.0, 20.0);
+    history.Commit(step, "rectángulo");
+    step.extrudeDepth = 10.0;
+    history.Commit(step, "extrusión");
+    check(history.IsModified() && history.CanUndo() && history.UndoText() == "extrusión",
+          "después de cambiar se puede deshacer el último cambio");
+
+    check(!history.Undo().extrudeDepth && history.Current().sketch.HasProfile(), "deshacer vuelve al boceto sin extruir");
+    check(history.CanRedo() && history.RedoText() == "extrusión", "lo deshecho se puede rehacer");
+    check(!history.Undo().sketch.HasProfile() && !history.CanUndo(), "deshacer otra vez vuelve a la pieza vacía");
+    check(!history.IsModified(), "deshacer hasta la pieza guardada la deja sin cambios");
+    check(history.Redo().sketch.HasProfile() && history.Redo().extrudeDepth == 10.0 && !history.CanRedo(),
+          "rehacer avanza en orden");
+
+    history.MarkSaved();
+    check(!history.IsModified(), "guardar deja la pieza sin cambios");
+    history.Undo();
+    check(history.IsModified(), "deshacer después de guardar la marca como modificada");
+    Part other = history.Current();
+    other.sketch.SetRectangle(10.0, 10.0);
+    history.Commit(other, "rectángulo");
+    check(!history.CanRedo(), "un cambio nuevo borra lo que se podía rehacer");
+    check(history.IsModified(), "y la pieza guardada ya no se puede alcanzar");
+
+    for (size_t i = 0; i < History::kMaxUndo + 20; ++i)
+    {
+      other.extrudeDepth = double(i + 1);
+      history.Commit(other, "extrusión");
+    }
+    size_t undos = 0;
+    while (history.CanUndo())
+    {
+      history.Undo();
+      ++undos;
+    }
+    check(undos == History::kMaxUndo, "se pueden deshacer hasta 100 cambios");
+
+    history.Reset(part);
+    check(!history.CanUndo() && !history.CanRedo() && !history.IsModified() && history.Current().extrudeDepth == 10.0,
+          "abrir una pieza empieza un historial nuevo");
   }
 
   // Las piezas del formato anterior (versión 1, rectángulo) se siguen abriendo.

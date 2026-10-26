@@ -62,6 +62,9 @@ public:
   void StartFacePick();
   // True mientras se dibuja un contorno con Línea o Arco y ya hay puntos marcados.
   bool IsDrawingChain() const;
+  // Mientras se dibuja, borra el último punto marcado (lo mismo que Retroceso). Devuelve
+  // false si no hay herramienta activa o todavía no se marcó ningún punto.
+  bool RemoveLastToolPoint();
   // Pasa de Línea a Arco (o al revés) sin perder lo dibujado: el próximo lado usa la nueva.
   void SwitchChainTool(SketchTool tool);
 

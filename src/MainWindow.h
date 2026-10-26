@@ -1,5 +1,6 @@
 #pragma once
 
+#include "History.h"
 #include "OccView.h"
 #include "PartDocument.h"
 
@@ -37,10 +38,15 @@ private:
   void sketchOnFace(const gp_Ax3& plane);
   void addFeature(const Sketch& profile);
   void removeLastFeature();
+  void undo();
+  void redo();
   void cancelTool();
 
   void setPart(const Part& part, const QString& filePath);
-  void markModified();
+  // Registra el cambio `what` en el historial (para deshacer) y marca la pieza como modificada.
+  void markModified(const QString& what);
+  // Muestra la pieza del historial después de deshacer o rehacer.
+  void restore(const Part& part, const QString& message);
   bool confirmDiscardChanges();
   bool writeTo(const QString& filePath);
   void updateActions();
@@ -55,10 +61,12 @@ private:
   QAction* myCutAction;
   QAction* myBossAction;
   QAction* myRemoveFeatureAction;
+  QAction* myUndoAction;
+  QAction* myRedoAction;
   QLabel* myStatusLabel;
   Part myPart;
   QString myFilePath;
-  bool myModified = false;
+  History myHistory;
 
   // Operación en curso: el tipo, desde que se elige en el menú, y el plano, desde que se
   // hace clic en la cara. Mientras hay plano, Línea y Rectángulo dibujan sobre él.
