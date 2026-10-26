@@ -29,3 +29,11 @@ La **primera versión** se centra en **boceto 2D con medidas → extrusión a pi
 **D-6 · 2026-10-26 · vigente**
 Tecnología: **C++ con Qt** para la interfaz y **Open CASCADE** como motor geométrico. Build con **CMake**; dependencias en Windows con **vcpkg** (`vcpkg.json`).
 *Por qué:* Sergio eligió C++ por rendimiento. Se le recomendó Python + Qt + Open CASCADE, que llega antes a una versión funcionando, y prefirió C++. Open CASCADE porque hacer un motor geométrico propio es inviable.
+
+**D-7 · 2026-10-26 · vigente**
+Después de la v1, lo primero que se suma es **guardar, abrir y exportar a STEP**.
+*Por qué:* Sergio lo eligió entre tres opciones (también estaban dibujar con el mouse y más operaciones). Sin guardar, el trabajo se pierde al cerrar la app, y una empresa necesita pasar la pieza a otros programas CAD.
+
+**D-8 · 2026-10-26 · vigente (decisión técnica, se puede revisar)**
+Formato propio **`.cadp`**: JSON con los **parámetros** de la pieza (boceto y extrusión), no la geometría. Al abrir, la geometría se reconstruye. Lleva `format` y `version` para poder evolucionar. Para intercambio, **STEP AP214 en milímetros**.
+*Por qué:* guardar parámetros mantiene la pieza editable (paramétrica), y JSON es legible y fácil de migrar. STEP es el estándar que abren SolidWorks, NX y casi cualquier CAD. La extensión `.cadp` es provisoria hasta que haya nombre de producto.

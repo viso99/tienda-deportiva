@@ -12,7 +12,7 @@ Lo que **todavía no está decidido**. Nada de esta página es un hecho. Cuando 
 ## Preguntas abiertas (para decidir con Sergio)
 
 1. **Qué hacer con el código de la tienda:** ¿se borra, se archiva o se mueve a otro repo? No tocarlo hasta que Sergio decida.
-2. **Formatos de archivo:** formato propio y compatibilidad (por ejemplo STEP para 3D y DXF/DWG para 2D). Importa porque los clientes son empresas (D-3).
+2. **Formatos de archivo:** el formato propio y STEP ya están (D-8). Faltan importar STEP y los formatos 2D (DXF/DWG) para cuando haya planos.
 3. **Alcance exacto de la v1** más allá de boceto → extrusión: ¿guardar y abrir?, ¿deshacer?, ¿cotas editables?, ¿exportar?
 4. **Modelo de negocio y licencia:** venta, suscripción, gratis o código abierto. Influye en qué librerías se pueden usar (por sus licencias).
-5. **Nombre del producto:** el repo se llama `tienda-deportiva` y el código dice "PROSPORT", y ninguno de los dos aplica.
+5. **Nombre del producto:** el repo se llama `tienda-deportiva` y la tienda dice "PROSPORT", y ninguno de los dos aplica. La extensión `.cadp` también es provisoria.
