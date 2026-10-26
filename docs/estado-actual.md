@@ -9,7 +9,7 @@ El repo tiene **dos cosas separadas**:
 
 ## App CAD
 
-Hechos los pasos 2 (**ventana con vista 3D**), 3 (**boceto con medidas**) y 4 (**extrusión a pieza 3D**): el flujo de la v1 (D-5) funciona de punta a punta. Compilada y probada en Linux; todavía no se probó en Windows (ver [compilar.md](compilar.md)).
+Hechos los pasos 2 (**ventana con vista 3D**), 3 (**boceto con medidas**) y 4 (**extrusión a pieza 3D**): el flujo de la v1 (D-5) funciona de punta a punta. Compilada y probada en Linux (Open CASCADE 7.6) y en Windows 11 (Open CASCADE 8.0.1), el 2026-10-26. Ver [compilar.md](compilar.md).
 
 | Archivo | Qué hace |
 |---|---|

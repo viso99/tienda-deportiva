@@ -6,7 +6,7 @@ Leé este archivo entero al empezar cada sesión. Es corto a propósito: dice qu
 
 - **Producto objetivo (confirmado por Sergio, 2026-10-26):** un programa de diseño CAD **de escritorio**, del estilo de SolidWorks, NX o AutoCAD, que hace **piezas 3D y planos 2D**, pensado para **otras personas y empresas**. La primera versión permite **dibujar un boceto 2D con medidas y extruirlo a una pieza 3D**. Detalle en [docs/producto.md](docs/producto.md).
 - **Tecnología (confirmada):** C++, Qt y Open CASCADE, con CMake y vcpkg. Ver D-6 en [docs/decisiones.md](docs/decisiones.md).
-- **Código actual (verificado):** la app CAD está en sus primeros pasos, en `src/` (por ahora una ventana con vista 3D). En la raíz quedan además los 3 archivos de una **tienda web de demostración** anterior ("PROSPORT"), que no forma parte del producto. Detalle en [docs/estado-actual.md](docs/estado-actual.md).
+- **Código actual (verificado):** la app CAD está en `src/` y ya hace el flujo de la v1 (rectángulo con medidas → extrusión a pieza 3D, paramétrico). En la raíz quedan además los 3 archivos de una **tienda web de demostración** anterior ("PROSPORT"), que no forma parte del producto. Detalle en [docs/estado-actual.md](docs/estado-actual.md).
 
 > ⚠️ La tienda (`index.html`, `styles.css`, `script.js`) **no** tiene relación con el CAD. No deduzcas requisitos del CAD a partir de ella, y no la toques hasta que Sergio decida qué hacer con ella.
 

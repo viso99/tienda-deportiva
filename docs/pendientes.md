@@ -6,7 +6,7 @@ Lo que **todavía no está decidido**. Nada de esta página es un hecho. Cuando 
 
 | # | Supuesto | Por qué se asumió | Cómo validarlo |
 |---|---|---|---|
-| S-1 | El sistema operativo inicial es **Windows** | Es donde trabajan casi todas las empresas que usan SolidWorks (que solo existe para Windows) | Preguntarle a Sergio; los pasos de compilación en Windows ([compilar.md](compilar.md)) tampoco están probados todavía |
+| S-1 | El sistema operativo inicial es **Windows** | Es donde trabajan casi todas las empresas que usan SolidWorks (que solo existe para Windows) | Preguntarle a Sergio. La compilación en Windows ya está verificada ([compilar.md](compilar.md)) |
 | S-2 | El CAD se desarrolla **en este mismo repo** (`tienda-deportiva`) | Es el único repo del proyecto | Preguntarle a Sergio si prefiere un repo nuevo con otro nombre |
 
 ## Preguntas abiertas (para decidir con Sergio)
