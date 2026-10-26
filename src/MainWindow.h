@@ -1,10 +1,10 @@
 #pragma once
 
+#include "OccView.h"
 #include "PartDocument.h"
 
 #include <QMainWindow>
 
-class OccView;
 class QAction;
 
 // Ventana principal: menús de archivo, boceto y operaciones, y vista 3D.
@@ -27,6 +27,8 @@ private:
   void exportStep();
 
   void drawRectangle();
+  void startSketchTool(SketchTool tool);
+  void setProfile(const std::vector<gp_Pnt2d>& points);
   void extrude();
 
   void setPart(const Part& part, const QString& filePath);

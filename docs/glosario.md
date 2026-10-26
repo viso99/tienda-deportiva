@@ -5,6 +5,8 @@ Términos de CAD explicados de forma simple. Usá estas palabras con Sergio y en
 - **CAD:** diseño asistido por computadora. Programas como SolidWorks, NX o AutoCAD.
 - **Boceto (sketch):** dibujo 2D sobre un plano (líneas, arcos, rectángulos) que sirve de base para crear una pieza 3D.
 - **Cota:** medida que se le pone a un elemento del boceto o del plano, por ejemplo "40 mm".
+- **Contorno (perfil):** línea cerrada del boceto que encierra un área; es lo que se extruye.
+- **Ajuste (snap):** al dibujar con el mouse, el punto "salta" al valor redondo más cercano (hoy, al milímetro) para que las medidas queden exactas.
 - **Restricción:** regla geométrica del boceto, por ejemplo "estas dos líneas son paralelas" o "esta línea es horizontal".
 - **Extrusión:** "estirar" un boceto 2D en una dirección para obtener un sólido 3D. Es el núcleo de la v1 (D-5).
 - **Operación (feature):** cada paso que modifica la pieza: extrusión, agujero, redondeo, etc.

@@ -1,4 +1,4 @@
-// Pruebas del núcleo: guardar/abrir piezas y exportar a STEP.
+// Pruebas del núcleo: boceto, guardar/abrir piezas y exportar a STEP.
 // Se corren con `ctest` después de compilar. Devuelve 0 si todo pasa.
 
 #include "Extrude.h"
@@ -80,13 +80,81 @@ int main()
   writeText(badPath, R"({"format":"cad-app-part","version":1,"sketch":{"type":"rectangle","width":-4,"height":2}})");
   check(!LoadPart(badPath, &untouched, &error), "rechaza medidas negativas");
 
-  writeText(badPath, R"({"format":"cad-app-part","version":2})");
+  writeText(badPath, R"({"format":"cad-app-part","version":3})");
   check(!LoadPart(badPath, &untouched, &error), "rechaza una versión de formato desconocida");
 
   writeText(badPath, R"({"format":"otro"})");
   check(!LoadPart(badPath, &untouched, &error), "rechaza un JSON que no es una pieza");
 
   check(!LoadPart(dir.filePath("no-existe.cadp"), &untouched, &error), "falla si el archivo no existe");
+
+  // Contornos válidos e inválidos.
+  const std::vector<gp_Pnt2d> lShape = {gp_Pnt2d(0, 0), gp_Pnt2d(30, 0), gp_Pnt2d(30, 10),
+                                        gp_Pnt2d(10, 10), gp_Pnt2d(10, 25), gp_Pnt2d(0, 25)};
+  check(Sketch::IsValidProfile(lShape), "una L es un contorno válido");
+  const std::vector<gp_Pnt2d> clockwise(lShape.rbegin(), lShape.rend());
+  check(Sketch::IsValidProfile(clockwise), "el sentido del recorrido no importa");
+  check(!Sketch::IsValidProfile({gp_Pnt2d(0, 0), gp_Pnt2d(10, 0)}), "rechaza menos de 3 puntos");
+  check(!Sketch::IsValidProfile({gp_Pnt2d(0, 0), gp_Pnt2d(10, 0), gp_Pnt2d(20, 0)}),
+        "rechaza puntos alineados (sin área)");
+  check(!Sketch::IsValidProfile({gp_Pnt2d(0, 0), gp_Pnt2d(10, 10), gp_Pnt2d(10, 0), gp_Pnt2d(0, 10)}),
+        "rechaza un contorno que se cruza (moño)");
+  check(!Sketch::IsValidProfile({gp_Pnt2d(0, 0), gp_Pnt2d(10, 0), gp_Pnt2d(5, 0), gp_Pnt2d(5, 8)}),
+        "rechaza un lado que vuelve sobre el anterior");
+  check(!Sketch::IsValidProfile({gp_Pnt2d(0, 0), gp_Pnt2d(10, 0), gp_Pnt2d(10, 0), gp_Pnt2d(0, 10)}),
+        "rechaza un lado de largo cero");
+  check(!Sketch::IsValidProfile({gp_Pnt2d(0, 0), gp_Pnt2d(20, 0), gp_Pnt2d(20, 10), gp_Pnt2d(10, 0),
+                                 gp_Pnt2d(0, 10)}),
+        "rechaza un vértice que toca otro lado");
+
+  Sketch invalid;
+  check(!invalid.SetPolygon({gp_Pnt2d(0, 0), gp_Pnt2d(10, 10), gp_Pnt2d(10, 0), gp_Pnt2d(0, 10)}),
+        "SetPolygon rechaza un contorno inválido");
+  check(!invalid.HasProfile(), "un contorno rechazado no queda en el boceto");
+
+  Sketch rectangle;
+  check(rectangle.SetPolygon({gp_Pnt2d(5, 5), gp_Pnt2d(5, 15), gp_Pnt2d(25, 15), gp_Pnt2d(25, 5)}),
+        "acepta un rectángulo dibujado en cualquier lugar y sentido");
+  check(rectangle.IsRectangle() && rectangle.Width() == 20.0 && rectangle.Height() == 10.0,
+        "reconoce el rectángulo y sus medidas");
+  check(rectangle.DimensionedEdges().size() == 2, "un rectángulo lleva 2 cotas (ancho y alto)");
+
+  // Un contorno cualquiera se guarda, se abre y se extruye (L: 30×10 + 10×15 = 450 mm², × 4 = 1800 mm³).
+  Part lPart;
+  check(lPart.sketch.SetPolygon(lShape), "acepta la L en el boceto");
+  check(!lPart.sketch.IsRectangle(), "la L no es un rectángulo");
+  check(lPart.sketch.DimensionedEdges().size() == 6, "la L lleva una cota por lado");
+  lPart.extrudeDepth = 4.0;
+  const QString lPath = dir.filePath("ele.cadp");
+  check(SavePart(lPart, lPath, &error), "guarda la L");
+  Part loadedL;
+  check(LoadPart(lPath, &loadedL, &error), "abre la L");
+  check(loadedL.sketch.Points().size() == lShape.size(), "la L conserva sus 6 vértices");
+  bool samePoints = loadedL.sketch.Points().size() == lShape.size();
+  for (size_t i = 0; samePoints && i < lShape.size(); ++i)
+    samePoints = loadedL.sketch.Points()[i].IsEqual(lShape[i], 0.0);
+  check(samePoints, "la L conserva sus coordenadas exactas");
+  check(std::abs(volumeOf(ExtrudeSketch(loadedL.sketch, *loadedL.extrudeDepth)) - 1800.0) < 1e-6,
+        "la L extruida tiene 1800 mm³");
+  const TopoDS_Shape clockwiseSolid = [&] {
+    Sketch sketch;
+    sketch.SetPolygon(clockwise);
+    return ExtrudeSketch(sketch, 4.0);
+  }();
+  check(std::abs(volumeOf(clockwiseSolid) - 1800.0) < 1e-6, "la L recorrida al revés da el mismo sólido");
+
+  // Las piezas del formato anterior (versión 1, rectángulo) se siguen abriendo.
+  const QString v1Path = dir.filePath("v1.cadp");
+  writeText(v1Path, R"({"format":"cad-app-part","version":1,"sketch":{"type":"rectangle","width":40,"height":20},"extrude":{"depth":10}})");
+  Part v1;
+  check(LoadPart(v1Path, &v1, &error), "abre una pieza de la versión 1");
+  check(v1.sketch.IsRectangle() && v1.sketch.Width() == 40.0 && v1.sketch.Height() == 20.0,
+        "la pieza de la versión 1 conserva el rectángulo");
+
+  writeText(badPath, R"({"format":"cad-app-part","version":2,"sketch":{"type":"polygon","points":[[0,0],[10,10],[10,0],[0,10]]}})");
+  check(!LoadPart(badPath, &untouched, &error), "rechaza un contorno guardado que se cruza");
+  writeText(badPath, R"({"format":"cad-app-part","version":2,"sketch":{"type":"polygon","points":[[0,0],[10,"a"],[10,10]]}})");
+  check(!LoadPart(badPath, &untouched, &error), "rechaza coordenadas que no son números");
 
   // La exportación STEP se puede volver a leer y tiene el volumen esperado (40 × 20 × 10 = 8000 mm³).
   const QString stepPath = dir.filePath("bloque.step");
