@@ -9,7 +9,7 @@ El repo tiene **dos cosas separadas**:
 
 ## App CAD
 
-Hechos los pasos 2 (**ventana con vista 3D**), 3 (**boceto con medidas**) y 4 (**extrusión a pieza 3D**): el flujo de la v1 (D-5) funciona de punta a punta. Compilada y probada en Linux; todavía no se probó en Windows (ver [compilar.md](compilar.md)).
+Hechos los pasos 2 (**ventana con vista 3D**), 3 (**boceto con medidas**) y 4 (**extrusión a pieza 3D**): el flujo de la v1 (D-5) funciona de punta a punta. Compilada y probada en Linux (Open CASCADE 7.6) y en Windows 11 (Open CASCADE 8.0.1), el 2026-10-26. Ver [compilar.md](compilar.md).
 
 | Archivo | Qué hace |
 |---|---|
@@ -20,7 +20,7 @@ Hechos los pasos 2 (**ventana con vista 3D**), 3 (**boceto con medidas**) y 4 (*
 | `src/RectangleDialog.*` | Diálogo que pide ancho y alto en mm (0,01 a 100 000) |
 | `src/OccView.*` | Widget que incrusta la vista 3D de Open CASCADE (`V3d_View`) y traduce el mouse con `AIS_ViewController`. `ShowSketch` dibuja el contorno y dos cotas (`PrsDim_LengthDimension`) y pone la vista desde arriba. `ShowPart` muestra el sólido sombreado con aristas en vista isométrica |
 
-Qué hace hoy: muestra una grilla en el plano XY, el cubo de orientación (`AIS_ViewCube`) arriba a la derecha y permite girar (botón izquierdo), mover (botón del medio) y hacer zoom (rueda). Con **Boceto → Rectángulo…** se ingresan ancho y alto, y se dibuja el rectángulo con sus cotas. Con **Operaciones → Extruir…** se ingresa la distancia y se ve el bloque 3D. Si después se cambia el rectángulo, la pieza se recalcula con la misma distancia. Hay un solo perfil y una sola extrusión. Todavía **no** hay dibujo con el mouse, otras formas, otras operaciones, archivos (guardar/abrir/exportar) ni deshacer.
+Qué hace hoy: muestra una grilla en el plano XY, el cubo de orientación (`AIS_ViewCube`) arriba a la derecha y permite girar (botón izquierdo), mover (botón del medio) y hacer zoom (rueda). Con **Boceto → Rectángulo…** se ingresan ancho y alto, y se dibuja el rectángulo con sus cotas. Con **Operaciones → Extruir…** se ingresa la distancia y se ve el bloque 3D. Si después se cambia el rectángulo, la pieza se recalcula con la misma distancia. Al recalcular, la vista vuelve a la isométrica y se pierde el giro que había hecho el usuario (lo hace `ShowPart`). Hay un solo perfil y una sola extrusión. Todavía **no** hay dibujo con el mouse, otras formas, otras operaciones, archivos (guardar/abrir/exportar) ni deshacer.
 
 ## Tienda web (código heredado)
 

@@ -4,6 +4,7 @@
 
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_ViewController.hxx>
+#include <Graphic3d_Vec2.hxx>
 #include <NCollection_Sequence.hxx>
 #include <TopoDS_Shape.hxx>
 #include <V3d_View.hxx>
