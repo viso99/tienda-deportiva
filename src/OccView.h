@@ -4,8 +4,11 @@
 
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_ViewController.hxx>
+#include <NCollection_Sequence.hxx>
 #include <V3d_View.hxx>
 #include <V3d_Viewer.hxx>
+
+class Sketch;
 
 // Vista 3D de Open CASCADE incrustada en un widget de Qt.
 // AIS_ViewController traduce el mouse en giro, desplazamiento y zoom.
@@ -20,6 +23,9 @@ public:
   QPaintEngine* paintEngine() const override { return nullptr; }
 
   const Handle(AIS_InteractiveContext)& Context() const { return myContext; }
+
+  // Muestra el boceto (contorno y cotas) en lugar del anterior y lo mira desde arriba.
+  void ShowSketch(const Sketch& sketch);
 
 protected:
   void paintEvent(QPaintEvent* event) override;
@@ -40,4 +46,5 @@ private:
   Handle(V3d_Viewer) myViewer;
   Handle(V3d_View) myView;
   Handle(AIS_InteractiveContext) myContext;
+  NCollection_Sequence<Handle(AIS_InteractiveObject)> mySketchObjects;
 };

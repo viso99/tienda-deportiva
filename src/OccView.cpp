@@ -3,9 +3,15 @@
 #include <QMouseEvent>
 #include <QWheelEvent>
 
+#include "Sketch.h"
+
+#include <AIS_Shape.hxx>
 #include <AIS_ViewCube.hxx>
 #include <Aspect_DisplayConnection.hxx>
 #include <OpenGl_GraphicDriver.hxx>
+#include <Prs3d_DimensionAspect.hxx>
+#include <PrsDim_LengthDimension.hxx>
+#include <gp_Pln.hxx>
 
 #ifdef _WIN32
 #include <WNT_Window.hxx>
@@ -77,6 +83,50 @@ void OccView::initViewer()
   myContext->Display(viewCube, Standard_False);
 
   myView->MustBeResized();
+}
+
+void OccView::ShowSketch(const Sketch& sketch)
+{
+  if (myView.IsNull())
+    initViewer();
+
+  for (const Handle(AIS_InteractiveObject)& object : mySketchObjects)
+    myContext->Remove(object, Standard_False);
+  mySketchObjects.Clear();
+
+  if (sketch.HasProfile())
+  {
+    Handle(AIS_Shape) outline = new AIS_Shape(sketch.Wire());
+    outline->SetColor(Quantity_NOC_DEEPSKYBLUE1);
+    outline->SetWidth(2.0);
+    mySketchObjects.Append(outline);
+
+    // Flechas proporcionales al boceto, para que no tapen piezas chicas.
+    Handle(Prs3d_DimensionAspect) dimAspect = new Prs3d_DimensionAspect();
+    dimAspect->MakeArrows3d(Standard_False);
+    dimAspect->ArrowAspect()->SetLength(0.04 * Max(sketch.Width(), sketch.Height()));
+    dimAspect->SetCommonColor(Quantity_NOC_GREEN2);
+
+    const gp_Pln sketchPlane(gp::XOY());
+    Handle(PrsDim_LengthDimension) widthDim =
+        new PrsDim_LengthDimension(sketch.WidthEdge(), sketchPlane);
+    widthDim->SetDimensionAspect(dimAspect);
+    widthDim->SetFlyout(-0.25 * sketch.Height() - 5.0);
+    mySketchObjects.Append(widthDim);
+
+    Handle(PrsDim_LengthDimension) heightDim =
+        new PrsDim_LengthDimension(sketch.HeightEdge(), sketchPlane);
+    heightDim->SetDimensionAspect(dimAspect);
+    heightDim->SetFlyout(-0.25 * sketch.Width() - 5.0);
+    mySketchObjects.Append(heightDim);
+
+    for (const Handle(AIS_InteractiveObject)& object : mySketchObjects)
+      myContext->Display(object, Standard_False);
+  }
+
+  myView->SetProj(V3d_Zpos);
+  myView->FitAll(0.3, Standard_False);
+  update();
 }
 
 void OccView::paintEvent(QPaintEvent*)

@@ -14,6 +14,10 @@ add_executable(CadApp WIN32
   src/MainWindow.h
   src/OccView.cpp
   src/OccView.h
+  src/RectangleDialog.cpp
+  src/RectangleDialog.h
+  src/Sketch.cpp
+  src/Sketch.h
 )
 
 target_include_directories(CadApp PRIVATE ${OpenCASCADE_INCLUDE_DIR})
