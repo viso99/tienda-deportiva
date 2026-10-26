@@ -21,6 +21,8 @@ add_library(CadCore STATIC
   src/Extrude.h
   src/Format.cpp
   src/Format.h
+  src/Part.cpp
+  src/Part.h
   src/PartDocument.cpp
   src/PartDocument.h
   src/Sketch.cpp
@@ -29,12 +31,14 @@ add_library(CadCore STATIC
 target_include_directories(CadCore PUBLIC src ${OpenCASCADE_INCLUDE_DIR})
 target_link_libraries(CadCore PUBLIC
   Qt6::Core
-  TKernel TKMath TKBRep TKG3d TKGeomBase TKTopAlgo TKPrim
+  TKernel TKMath TKBRep TKG2d TKG3d TKGeomBase TKGeomAlgo TKTopAlgo TKPrim TKBO TKBool TKShHealing
   ${OCCT_STEP_LIBS}
 )
 
 add_executable(CadApp WIN32
   src/main.cpp
+  src/FeatureDialog.cpp
+  src/FeatureDialog.h
   src/MainWindow.cpp
   src/MainWindow.h
   src/OccView.cpp

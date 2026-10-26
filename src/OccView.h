@@ -9,14 +9,17 @@
 #include <TopoDS_Shape.hxx>
 #include <V3d_View.hxx>
 #include <V3d_Viewer.hxx>
+#include <gp.hxx>
+#include <gp_Ax3.hxx>
 #include <gp_Pnt2d.hxx>
 
 #include <optional>
 #include <vector>
 
+class AIS_Shape;
 class Sketch;
 
-// Herramientas para dibujar el boceto con el mouse sobre el plano XY.
+// Herramientas para dibujar el boceto con el mouse sobre un plano (el XY o una cara).
 enum class SketchTool
 {
   None,
@@ -45,14 +48,21 @@ public:
   // Muestra la pieza sólida en lugar del modelo anterior, en vista isométrica.
   void ShowPart(const TopoDS_Shape& part);
 
-  // Empieza a dibujar un perfil nuevo con el mouse, mirando el plano XY desde arriba.
-  // Al cerrarlo emite profileFinished; con Esc emite toolCanceled.
-  // Mostrar otro modelo (ShowSketch, ShowPart) cancela la herramienta sin emitir nada.
-  void StartSketchTool(SketchTool tool);
+  // Empieza a dibujar un perfil nuevo con el mouse sobre `plane`, mirándolo de frente.
+  // Los puntos se entregan en coordenadas del plano. Si se pasa `context` (la pieza),
+  // se muestra semitransparente detrás del boceto. Al cerrar el perfil emite
+  // profileFinished; con Esc emite toolCanceled. Mostrar otro modelo (ShowSketch,
+  // ShowPart) cancela la herramienta sin emitir nada.
+  void StartSketchTool(SketchTool tool, const gp_Ax3& plane = gp_Ax3(gp::XOY()),
+                       const TopoDS_Shape& context = TopoDS_Shape());
+  // Con la pieza mostrada (ShowPart), espera un clic en una cara plana y emite facePicked
+  // con su plano de boceto. Se puede girar la vista arrastrando. Esc emite toolCanceled.
+  void StartFacePick();
 
 signals:
   void profileFinished(const std::vector<gp_Pnt2d>& points);
   void toolCanceled();
+  void facePicked(const gp_Ax3& plane);
   // Doble clic en la cota del lado `edgeIndex` del boceto mostrado.
   void dimensionActivated(size_t edgeIndex);
   // Esc sin ninguna herramienta activa.
@@ -84,6 +94,9 @@ private:
   void addToolPoint(const Graphic3d_Vec2i& pixel);
   void finishProfile(const std::vector<gp_Pnt2d>& points);
   void endTool();
+  void endFacePick();
+  void pickFace(const Graphic3d_Vec2i& pixel);
+  gp_Pnt toWorld(const gp_Pnt2d& point) const;
   void updatePreview();
   void updateHint();
 
@@ -94,7 +107,12 @@ private:
   // Cotas del boceto mostrado y el lado que mide cada una.
   std::vector<std::pair<Handle(AIS_InteractiveObject), size_t>> myDimensions;
 
+  Handle(AIS_Shape) myPartObject;          // la pieza mostrada por ShowPart
+  bool myPickingFace = false;
+  Graphic3d_Vec2i myPressPoint;            // dónde se apretó el botón izquierdo
+
   SketchTool myTool = SketchTool::None;
+  gp_Ax3 mySketchPlane;                    // plano donde se dibuja
   std::vector<gp_Pnt2d> myToolPoints;     // puntos ya marcados
   std::optional<gp_Pnt2d> myCursorPoint;  // posición del mouse sobre el plano, ajustada al mm
   QString myToolError;                    // aviso del último clic rechazado

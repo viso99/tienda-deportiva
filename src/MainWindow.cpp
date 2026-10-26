@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include "Extrude.h"
+#include "FeatureDialog.h"
 #include "Format.h"
 #include "OccView.h"
 #include "RectangleDialog.h"
@@ -15,6 +16,8 @@
 #include <QStatusBar>
 #include <QToolBar>
 
+#include <algorithm>
+
 namespace
 {
 const char* const kPartFilter = "Pieza (*.cadp)";
@@ -27,6 +30,9 @@ MainWindow::MainWindow(QWidget* parent)
     myExtrudeAction(new QAction("Extruir…", this)),
     myExportStepAction(new QAction("Exportar a STEP…", this)),
     myEditSketchAction(new QAction("Editar boceto", this)),
+    myCutAction(new QAction("Agujero o corte…", this)),
+    myBossAction(new QAction("Saliente…", this)),
+    myRemoveFeatureAction(new QAction("Quitar última operación", this)),
     myStatusLabel(new QLabel(this))
 {
   setCentralWidget(myView);
@@ -69,7 +75,17 @@ MainWindow::MainWindow(QWidget* parent)
   connect(myView, &OccView::profileFinished, this, &MainWindow::setProfile);
   connect(myView, &OccView::dimensionActivated, this, &MainWindow::editDimension);
   connect(myView, &OccView::escapePressed, this, [this] { myEditSketchAction->setChecked(false); });
-  connect(myView, &OccView::toolCanceled, this, &MainWindow::showModel);
+  connect(myView, &OccView::toolCanceled, this, &MainWindow::cancelTool);
+  connect(myView, &OccView::facePicked, this, &MainWindow::sketchOnFace);
+
+  myCutAction->setShortcut(Qt::Key_H);
+  myCutAction->setStatusTip("Restar material: elegí una cara, dibujá el contorno y su profundidad");
+  connect(myCutAction, &QAction::triggered, this, [this] { startFeature(Feature::Kind::Cut); });
+  myBossAction->setShortcut(Qt::Key_S);
+  myBossAction->setStatusTip("Sumar material: elegí una cara, dibujá el contorno y su altura");
+  connect(myBossAction, &QAction::triggered, this, [this] { startFeature(Feature::Kind::Boss); });
+  myRemoveFeatureAction->setStatusTip("Borrar el último agujero, corte o saliente");
+  connect(myRemoveFeatureAction, &QAction::triggered, this, &MainWindow::removeLastFeature);
   connect(myView, &OccView::toolHint, this, [this](const QString& text) { showStatus(text); });
 
   myExtrudeAction->setStatusTip("Convertir el boceto en una pieza 3D estirándolo en Z");
@@ -81,13 +97,21 @@ MainWindow::MainWindow(QWidget* parent)
   sketchMenu->addAction(rectangleAction);
   sketchMenu->addSeparator();
   sketchMenu->addAction(myEditSketchAction);
-  menuBar()->addMenu("Operaciones")->addAction(myExtrudeAction);
+  QMenu* operationsMenu = menuBar()->addMenu("Operaciones");
+  operationsMenu->addAction(myExtrudeAction);
+  operationsMenu->addAction(myCutAction);
+  operationsMenu->addAction(myBossAction);
+  operationsMenu->addSeparator();
+  operationsMenu->addAction(myRemoveFeatureAction);
   QToolBar* toolBar = addToolBar("Herramientas");
   toolBar->addAction(lineAction);
   toolBar->addAction(mouseRectangleAction);
   toolBar->addAction(rectangleAction);
   toolBar->addAction(myExtrudeAction);
   toolBar->addAction(myEditSketchAction);
+  toolBar->addSeparator();
+  toolBar->addAction(myCutAction);
+  toolBar->addAction(myBossAction);
 
   updateActions();
   updateTitle();
@@ -161,7 +185,7 @@ void MainWindow::exportStep()
     path += ".step";
 
   QString error;
-  if (!ExportStep(ExtrudeSketch(myPart.sketch, *myPart.extrudeDepth), path, &error))
+  if (!ExportStep(BuildPart(myPart), path, &error))
   {
     QMessageBox::warning(this, "Exportar a STEP", QString("No se pudo exportar la pieza.\n\n%1").arg(error));
     return;
@@ -184,14 +208,94 @@ void MainWindow::drawRectangle()
 
 void MainWindow::startSketchTool(SketchTool tool)
 {
-  // El perfil nuevo reemplaza al actual; si la pieza ya estaba extruida, se recalcula al cerrarlo.
-  // Primero se sale de "Editar boceto", porque mostrar el modelo cancela la herramienta.
+  // Con una cara elegida, se dibuja el contorno de la operación sobre ella.
+  if (myPendingPlane)
+  {
+    myView->StartSketchTool(tool, *myPendingPlane, myShape);
+    return;
+  }
+  // Si no, el perfil nuevo reemplaza al boceto base; si la pieza ya estaba extruida, se
+  // recalcula al cerrarlo. Primero se sale de "Editar boceto" y de cualquier operación a
+  // medias, porque mostrar el modelo cancela la herramienta.
+  myPendingKind.reset();
   myEditSketchAction->setChecked(false);
   myView->StartSketchTool(tool);
 }
 
+void MainWindow::startFeature(Feature::Kind kind)
+{
+  myEditSketchAction->setChecked(false);
+  showModel(); // muestra la pieza para elegir la cara
+  myPendingKind = kind;
+  myView->StartFacePick();
+}
+
+void MainWindow::sketchOnFace(const gp_Ax3& plane)
+{
+  myPendingPlane = plane;
+  // Empieza con el rectángulo, lo más común en agujeros y cortes; con L se pasa a líneas.
+  myView->StartSketchTool(SketchTool::Rectangle, plane, myShape);
+}
+
+void MainWindow::cancelTool()
+{
+  showModel();
+}
+
+void MainWindow::addFeature(const std::vector<gp_Pnt2d>& points)
+{
+  Feature feature;
+  feature.kind = *myPendingKind;
+  feature.plane = *myPendingPlane;
+  if (!feature.sketch.SetPolygon(points))
+  {
+    showModel();
+    return; // la vista solo entrega contornos válidos
+  }
+
+  const bool isCut = feature.kind == Feature::Kind::Cut;
+  FeatureDialog dialog(isCut, isCut ? 5.0 : 10.0, this);
+  if (dialog.exec() != QDialog::Accepted)
+  {
+    showModel();
+    return;
+  }
+  feature.depth = dialog.Depth();
+  feature.throughAll = dialog.ThroughAll();
+
+  Part candidate = myPart;
+  candidate.features.push_back(feature);
+  std::vector<size_t> failed;
+  BuildPart(candidate, &failed);
+  if (std::find(failed.begin(), failed.end(), candidate.features.size() - 1) != failed.end())
+  {
+    showModel();
+    QMessageBox::warning(this, isCut ? "Agujero o corte" : "Saliente",
+                         isCut ? "El corte no cambia la pieza: revisá que el contorno quede sobre la pieza."
+                               : "No se pudo agregar el saliente.");
+    return;
+  }
+  myPart = candidate;
+  markModified();
+  showModel();
+}
+
+void MainWindow::removeLastFeature()
+{
+  if (myPart.features.empty())
+    return;
+  myPart.features.pop_back();
+  markModified();
+  showModel();
+}
+
 void MainWindow::setProfile(const std::vector<gp_Pnt2d>& points)
 {
+  if (myPendingKind && myPendingPlane)
+  {
+    addFeature(points);
+    return;
+  }
   if (!myPart.sketch.SetPolygon(points))
     return; // la vista solo entrega contornos válidos
   markModified();
@@ -282,6 +386,9 @@ void MainWindow::updateActions()
   myExtrudeAction->setEnabled(myPart.sketch.HasProfile());
   myExportStepAction->setEnabled(myPart.extrudeDepth.has_value());
   myEditSketchAction->setEnabled(myPart.extrudeDepth.has_value());
+  myCutAction->setEnabled(myPart.extrudeDepth.has_value());
+  myBossAction->setEnabled(myPart.extrudeDepth.has_value());
+  myRemoveFeatureAction->setEnabled(!myPart.features.empty());
 }
 
 void MainWindow::updateTitle()
@@ -297,10 +404,28 @@ void MainWindow::showModel()
   const QString profile = sketch.IsRectangle()
                               ? QString("rectángulo de %1").arg(size)
                               : QString("contorno de %1 lados (%2)").arg(sketch.Points().size()).arg(size);
+  // Mostrar el modelo cancela lo que la vista estuviera haciendo (elegir cara, dibujar),
+  // así que también se descarta la operación a medias.
+  myPendingKind.reset();
+  myPendingPlane.reset();
+  myFailedFeatures.clear();
+  myShape = BuildPart(myPart, &myFailedFeatures);
   if (myPart.extrudeDepth && !myEditSketchAction->isChecked())
   {
-    myView->ShowPart(ExtrudeSketch(sketch, *myPart.extrudeDepth));
-    showStatus(QString("Pieza: %1, extruido %2 mm").arg(profile, FormatLength(*myPart.extrudeDepth)));
+    myView->ShowPart(myShape);
+    QString text = QString("Pieza: %1, extruido %2 mm").arg(profile, FormatLength(*myPart.extrudeDepth));
+    const size_t count = myPart.features.size();
+    if (count > 0)
+      text += count == 1 ? QString(", 1 operación") : QString(", %1 operaciones").arg(count);
+    if (!myFailedFeatures.empty())
+    {
+      // Puede pasar al cambiar el boceto base: un corte que quedó fuera de la pieza.
+      QStringList numbers;
+      for (size_t index : myFailedFeatures)
+        numbers << QString::number(index + 1);
+      text += QString(" · Atención: no se pudo aplicar la operación %1").arg(numbers.join(", "));
+    }
+    showStatus(text);
   }
   else if (sketch.HasProfile())
   {
