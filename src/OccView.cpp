@@ -4,6 +4,7 @@
 #include <QMouseEvent>
 #include <QWheelEvent>
 
+#include "Format.h"
 #include "Sketch.h"
 
 #include <AIS_Point.hxx>
@@ -17,6 +18,7 @@
 #include <OpenGl_GraphicDriver.hxx>
 #include <Prs3d_DimensionAspect.hxx>
 #include <PrsDim_LengthDimension.hxx>
+#include <TCollection_ExtendedString.hxx>
 #include <gp_Pln.hxx>
 #include <gp_Vec.hxx>
 
@@ -63,10 +65,6 @@ gp_Pnt to3d(const gp_Pnt2d& point)
   return gp_Pnt(point.X(), point.Y(), 0.0);
 }
 
-QString formatMm(double value)
-{
-  return QString::number(value, 'f', 1);
-}
 } // namespace
 
 OccView::OccView(QWidget* parent)
@@ -138,12 +136,17 @@ void OccView::ShowSketch(const Sketch& sketch)
 
     // Los lados vienen en sentido antihorario: con separación negativa, la cota queda afuera.
     const gp_Pln sketchPlane(gp::XOY());
-    for (const TopoDS_Edge& edge : sketch.DimensionedEdges())
+    for (const Sketch::DimensionedEdge& dimensioned : sketch.DimensionedEdges())
     {
-      Handle(PrsDim_LengthDimension) dimension = new PrsDim_LengthDimension(edge, sketchPlane);
+      Handle(PrsDim_LengthDimension) dimension =
+          new PrsDim_LengthDimension(dimensioned.edge, sketchPlane);
       dimension->SetDimensionAspect(dimAspect);
       dimension->SetFlyout(-0.08 * size - 3.0);
+      // El texto lo armamos nosotros: redondeado y con coma, igual que en el resto de la app.
+      const QString text = FormatLength(sketch.EdgeLength(dimensioned.index));
+      dimension->SetCustomValue(TCollection_ExtendedString(text.toUtf8().constData(), Standard_True));
       myModelObjects.Append(dimension);
+      myDimensions.emplace_back(dimension, dimensioned.index);
     }
 
     for (const Handle(AIS_InteractiveObject)& object : myModelObjects)
@@ -179,12 +182,18 @@ void OccView::StartSketchTool(SketchTool tool)
   clearModel();
   myTool = tool;
 
-  // Plano XY visto desde arriba, con el origen abajo a la izquierda y unos 150 mm a la vista.
+  // Plano XY visto desde arriba, con el origen abajo a la izquierda: entra por lo menos
+  // la zona de X -15 a 125 mm e Y -10 a 90 mm, sea cual sea la forma de la ventana.
+  const double regionWidth = 140.0;
+  const double regionHeight = 100.0;
+  const gp_Pnt center(55.0, 40.0, 0.0);
   myView->SetProj(V3d_Zpos);
-  const gp_Pnt center(60.0, 40.0, 0.0);
   myView->Camera()->SetEyeAndCenter(center.Translated(gp_Vec(0, 0, 500)), center);
   myView->Camera()->SetUp(gp::DY());
-  myView->SetSize(150.0);
+  const double aspect = height() > 0 ? double(width()) / height() : 1.0;
+  // SetSize fija el lado más largo de la vista.
+  myView->SetSize(aspect >= 1.0 ? Max(regionWidth, regionHeight * aspect)
+                                : Max(regionHeight, regionWidth / aspect));
   myView->ZFitAll();
   myView->Invalidate();
 
@@ -203,6 +212,7 @@ void OccView::clearModel()
   for (const Handle(AIS_InteractiveObject)& object : myModelObjects)
     myContext->Remove(object, Standard_False);
   myModelObjects.Clear();
+  myDimensions.clear();
 }
 
 void OccView::paintEvent(QPaintEvent*)
@@ -266,6 +276,27 @@ void OccView::mouseMoveEvent(QMouseEvent* event)
     update();
 }
 
+void OccView::mouseDoubleClickEvent(QMouseEvent* event)
+{
+  if (myTool != SketchTool::None || event->button() != Qt::LeftButton)
+    return;
+
+  // La cota que está bajo el mouse (la que Open CASCADE resalta al pasar por encima).
+  myContext->MoveTo(toViewPoint(event->position()).x(), toViewPoint(event->position()).y(),
+                    myView, Standard_False);
+  if (!myContext->HasDetected())
+    return;
+  const Handle(AIS_InteractiveObject) detected = myContext->DetectedInteractive();
+  for (const auto& [dimension, edgeIndex] : myDimensions)
+  {
+    if (dimension == detected)
+    {
+      emit dimensionActivated(edgeIndex);
+      return;
+    }
+  }
+}
+
 void OccView::wheelEvent(QWheelEvent* event)
 {
   if (UpdateZoom(Aspect_ScrollDelta(toViewPoint(event->position()),
@@ -277,7 +308,10 @@ void OccView::keyPressEvent(QKeyEvent* event)
 {
   if (myTool == SketchTool::None)
   {
-    QWidget::keyPressEvent(event);
+    if (event->key() == Qt::Key_Escape)
+      emit escapePressed();
+    else
+      QWidget::keyPressEvent(event);
     return;
   }
 
@@ -452,7 +486,7 @@ void OccView::updateHint()
 {
   QString position;
   if (myCursorPoint)
-    position = QString("X %1  Y %2 mm").arg(formatMm(myCursorPoint->X()), formatMm(myCursorPoint->Y()));
+    position = QString("X %1  Y %2 mm").arg(FormatLength(myCursorPoint->X()), FormatLength(myCursorPoint->Y()));
 
   QString text;
   if (myTool == SketchTool::Line)
@@ -467,7 +501,7 @@ void OccView::updateHint()
                  ? "Línea: clic para el siguiente punto, o en el primero (o Enter) para cerrar"
                  : "Línea: clic para el siguiente punto";
       if (myCursorPoint)
-        position += QString(" · largo %1 mm").arg(formatMm(myToolPoints.back().Distance(*myCursorPoint)));
+        position += QString(" · largo %1 mm").arg(FormatLength(myToolPoints.back().Distance(*myCursorPoint)));
     }
   }
   else if (myTool == SketchTool::Rectangle)
@@ -481,8 +515,8 @@ void OccView::updateHint()
       text = "Rectángulo: clic en la esquina opuesta";
       if (myCursorPoint)
         position += QString(" · %1 × %2 mm")
-                        .arg(formatMm(std::abs(myCursorPoint->X() - myToolPoints.front().X())),
-                             formatMm(std::abs(myCursorPoint->Y() - myToolPoints.front().Y())));
+                        .arg(FormatLength(std::abs(myCursorPoint->X() - myToolPoints.front().X())),
+                             FormatLength(std::abs(myCursorPoint->Y() - myToolPoints.front().Y())));
     }
   }
   else

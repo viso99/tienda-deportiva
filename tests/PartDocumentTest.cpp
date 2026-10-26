@@ -2,6 +2,7 @@
 // Se corren con `ctest` después de compilar. Devuelve 0 si todo pasa.
 
 #include "Extrude.h"
+#include "Format.h"
 #include "PartDocument.h"
 
 #include <QFile>
@@ -142,6 +143,43 @@ int main()
     return ExtrudeSketch(sketch, 4.0);
   }();
   check(std::abs(volumeOf(clockwiseSolid) - 1800.0) < 1e-6, "la L recorrida al revés da el mismo sólido");
+
+  // Cambiar la cota de un lado (L de 60 × 50: lados 0 a 5).
+  Sketch edited;
+  edited.SetPolygon({gp_Pnt2d(0, 0), gp_Pnt2d(60, 0), gp_Pnt2d(60, 20),
+                     gp_Pnt2d(20, 20), gp_Pnt2d(20, 50), gp_Pnt2d(0, 50)});
+  check(edited.EdgeLength(0) == 60.0, "el lado inferior de la L mide 60");
+  check(edited.SetEdgeLength(0, 80.0), "alarga el lado inferior");
+  check(edited.Points()[1].IsEqual(gp_Pnt2d(80, 0), 0.0) && edited.Points()[2].IsEqual(gp_Pnt2d(80, 20), 0.0),
+        "el lado perpendicular siguiente se mueve con él");
+  check(edited.Points()[3].IsEqual(gp_Pnt2d(20, 20), 0.0), "el lado paralelo absorbe el cambio");
+  check(edited.EdgeLength(2) == 60.0 && edited.EdgeLength(1) == 20.0, "la L sigue siendo una L");
+  check(std::abs(volumeOf(ExtrudeSketch(edited, 1.0)) - 2200.0) < 1e-6, "la L editada tiene el área esperada");
+  check(edited.SetEdgeLength(3, 40.0) && edited.Height() == 60.0, "alarga el brazo vertical de la L");
+  const std::vector<gp_Pnt2d> beforeBadEdit = edited.Points();
+  check(!edited.SetEdgeLength(2, 90.0), "rechaza una cota que haría cruzar el contorno");
+  check(edited.Points().size() == beforeBadEdit.size() && edited.Points()[3].IsEqual(beforeBadEdit[3], 0.0),
+        "una cota rechazada no cambia el boceto");
+  check(!edited.SetEdgeLength(0, 0.0) && !edited.SetEdgeLength(0, -5.0) && !edited.SetEdgeLength(9, 5.0),
+        "rechaza largos no positivos y lados que no existen");
+
+  Sketch box;
+  box.SetRectangle(40.0, 20.0);
+  check(box.SetEdgeLength(0, 55.0) && box.IsRectangle() && box.Width() == 55.0 && box.Height() == 20.0,
+        "cambiar el ancho de un rectángulo lo deja rectángulo");
+  check(box.SetEdgeLength(1, 30.0) && box.IsRectangle() && box.Height() == 30.0, "cambiar el alto también");
+
+  Sketch triangle;
+  triangle.SetPolygon({gp_Pnt2d(0, 0), gp_Pnt2d(20, 0), gp_Pnt2d(0, 20)});
+  check(triangle.SetEdgeLength(0, 30.0) && triangle.Points()[1].IsEqual(gp_Pnt2d(30, 0), 1e-9)
+            && triangle.Points()[2].IsEqual(gp_Pnt2d(0, 20), 0.0),
+        "en un triángulo solo se mueve el vértice final");
+
+  // Formato de las medidas que ve el usuario.
+  check(FormatLength(40.0) == "40", "40 se muestra sin decimales");
+  check(FormatLength(28.2842712) == "28,28", "redondea a 2 decimales con coma");
+  check(FormatLength(12.5) == "12,5", "saca los ceros finales");
+  check(FormatLength(-0.001) == "0", "no muestra -0");
 
   // Las piezas del formato anterior (versión 1, rectángulo) se siguen abriendo.
   const QString v1Path = dir.filePath("v1.cadp");

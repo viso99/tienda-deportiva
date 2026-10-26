@@ -6,6 +6,7 @@
 #include <QMainWindow>
 
 class QAction;
+class QLabel;
 
 // Ventana principal: menús de archivo, boceto y operaciones, y vista 3D.
 // La pieza es paramétrica: boceto + distancia de extrusión. Si cambia el boceto, se recalcula.
@@ -29,6 +30,7 @@ private:
   void drawRectangle();
   void startSketchTool(SketchTool tool);
   void setProfile(const std::vector<gp_Pnt2d>& points);
+  void editDimension(size_t edgeIndex);
   void extrude();
 
   void setPart(const Part& part, const QString& filePath);
@@ -38,10 +40,13 @@ private:
   void updateActions();
   void updateTitle();
   void showModel();
+  void showStatus(const QString& text);
 
   OccView* myView;
   QAction* myExtrudeAction;
   QAction* myExportStepAction;
+  QAction* myEditSketchAction;
+  QLabel* myStatusLabel;
   Part myPart;
   QString myFilePath;
   bool myModified = false;

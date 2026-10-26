@@ -19,6 +19,8 @@ endif()
 add_library(CadCore STATIC
   src/Extrude.cpp
   src/Extrude.h
+  src/Format.cpp
+  src/Format.h
   src/PartDocument.cpp
   src/PartDocument.h
   src/Sketch.cpp
