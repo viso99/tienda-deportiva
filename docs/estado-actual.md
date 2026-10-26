@@ -14,7 +14,7 @@ Hechos los pasos 2 (**ventana con vista 3D**), 3 (**boceto con medidas**) y 4 (*
 **Dibujo con el mouse (D-9, primera parte):** [Verificado] 2026-10-26 en Linux y en Windows (monitor al 125 %).
 **Cotas editables (D-9, segunda parte):** [Verificado] 2026-10-26 en Linux y en Windows, junto con los arreglos de origen visible, cotas con coma y barra de estado.
 **Agujeros, cortes y salientes (D-10):** [Verificado] 2026-10-26 en Linux y en Windows.
-**Círculos y arcos (D-11):** [Verificado] 2026-10-26 en Linux; **falta probarlo en Windows**.
+**Círculos y arcos (D-11):** [Verificado] 2026-10-26 en Linux y en Windows. Detalles vistos en Windows: las cotas de radio y diámetro se leen pero salen chicas, y la "R" usa otra letra que el resto; al elegir una cara, los agujeros de la pieza se ven como una cruz (ya pasaba con los bolsillos de D-10).
 
 | Archivo | Qué hace |
 |---|---|
