@@ -9,17 +9,18 @@ El repo tiene **dos cosas separadas**:
 
 ## App CAD
 
-Hechos los pasos 2 (**ventana con vista 3D**) y 3 (**boceto con medidas**). Compilada y probada en Linux; todavía no se probó en Windows (ver [compilar.md](compilar.md)).
+Hechos los pasos 2 (**ventana con vista 3D**), 3 (**boceto con medidas**) y 4 (**extrusión a pieza 3D**): el flujo de la v1 (D-5) funciona de punta a punta. Compilada y probada en Linux; todavía no se probó en Windows (ver [compilar.md](compilar.md)).
 
 | Archivo | Qué hace |
 |---|---|
 | `src/main.cpp` | Arranca Qt y abre la ventana principal. En Linux fuerza la plataforma `xcb`, porque Open CASCADE dibuja sobre una ventana X11 |
-| `src/MainWindow.*` | Ventana principal: menú y barra "Boceto" con la acción "Rectángulo…", la vista 3D y una barra de estado. Guarda el `Sketch` actual |
+| `src/MainWindow.*` | Ventana principal: menús "Boceto" (Rectángulo…) y "Operaciones" (Extruir…, activo cuando hay boceto), barra de herramientas, vista 3D y barra de estado. Guarda la pieza como **boceto + distancia de extrusión** y la recalcula si cambia el boceto (paramétrico) |
+| `src/Extrude.*` | `ExtrudeSketch`: extruye la cara del boceto en +Z con `BRepPrimAPI_MakePrism` |
 | `src/Sketch.*` | Modelo del boceto: un único rectángulo en el plano XY con una esquina en el origen (mm). Da el contorno (`Wire`), la cara (`Face`, para extruir en el paso 4) y los lados acotados |
 | `src/RectangleDialog.*` | Diálogo que pide ancho y alto en mm (0,01 a 100 000) |
-| `src/OccView.*` | Widget que incrusta la vista 3D de Open CASCADE (`V3d_View`) y traduce el mouse con `AIS_ViewController`. `ShowSketch` dibuja el contorno y dos cotas (`PrsDim_LengthDimension`) y pone la vista desde arriba |
+| `src/OccView.*` | Widget que incrusta la vista 3D de Open CASCADE (`V3d_View`) y traduce el mouse con `AIS_ViewController`. `ShowSketch` dibuja el contorno y dos cotas (`PrsDim_LengthDimension`) y pone la vista desde arriba. `ShowPart` muestra el sólido sombreado con aristas en vista isométrica |
 
-Qué hace hoy: muestra una grilla en el plano XY, el cubo de orientación (`AIS_ViewCube`) arriba a la derecha y permite girar (botón izquierdo), mover (botón del medio) y hacer zoom (rueda). Con **Boceto → Rectángulo…** se ingresan ancho y alto, y se dibuja el rectángulo con sus cotas. Volver a usarlo reemplaza el rectángulo (hay un solo perfil). Todavía **no** hay extrusión, dibujo con el mouse, archivos ni deshacer.
+Qué hace hoy: muestra una grilla en el plano XY, el cubo de orientación (`AIS_ViewCube`) arriba a la derecha y permite girar (botón izquierdo), mover (botón del medio) y hacer zoom (rueda). Con **Boceto → Rectángulo…** se ingresan ancho y alto, y se dibuja el rectángulo con sus cotas. Con **Operaciones → Extruir…** se ingresa la distancia y se ve el bloque 3D. Si después se cambia el rectángulo, la pieza se recalcula con la misma distancia. Hay un solo perfil y una sola extrusión. Todavía **no** hay dibujo con el mouse, otras formas, otras operaciones, archivos (guardar/abrir/exportar) ni deshacer.
 
 ## Tienda web (código heredado)
 

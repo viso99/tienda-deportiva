@@ -4,9 +4,13 @@
 
 #include <QMainWindow>
 
-class OccView;
+#include <optional>
 
-// Ventana principal: menú de boceto y vista 3D.
+class OccView;
+class QAction;
+
+// Ventana principal: menús de boceto y operaciones, y vista 3D.
+// La pieza es paramétrica: boceto + distancia de extrusión. Si cambia el boceto, se recalcula.
 class MainWindow : public QMainWindow
 {
   Q_OBJECT
@@ -16,7 +20,11 @@ public:
 
 private:
   void drawRectangle();
+  void extrude();
+  void showModel();
 
   OccView* myView;
+  QAction* myExtrudeAction;
   Sketch mySketch;
+  std::optional<double> myExtrudeDepth;
 };
