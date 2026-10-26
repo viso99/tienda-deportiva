@@ -5,6 +5,7 @@
 #include <QWheelEvent>
 
 #include "Format.h"
+#include "Part.h"
 #include "Sketch.h"
 
 #include <AIS_Point.hxx>
@@ -18,6 +19,10 @@
 #include <OpenGl_GraphicDriver.hxx>
 #include <Prs3d_DimensionAspect.hxx>
 #include <PrsDim_LengthDimension.hxx>
+#include <StdSelect_BRepOwner.hxx>
+#include <Bnd_Box.hxx>
+#include <BRepBndLib.hxx>
+#include <TopoDS.hxx>
 #include <TCollection_ExtendedString.hxx>
 #include <gp_Pln.hxx>
 #include <gp_Vec.hxx>
@@ -58,11 +63,6 @@ const int kCloseDistancePx = 10;
 double snap(double value)
 {
   return std::round(value / kSnapStep) * kSnapStep;
-}
-
-gp_Pnt to3d(const gp_Pnt2d& point)
-{
-  return gp_Pnt(point.X(), point.Y(), 0.0);
 }
 
 } // namespace
@@ -171,16 +171,50 @@ void OccView::ShowPart(const TopoDS_Shape& part)
   solid->Attributes()->FaceBoundaryAspect()->SetColor(Quantity_NOC_BLACK);
   myModelObjects.Append(solid);
   myContext->Display(solid, Standard_False);
+  myPartObject = solid;
 
   myView->SetProj(V3d_XposYnegZpos);
   myView->FitAll(0.3, Standard_False);
   update();
 }
 
-void OccView::StartSketchTool(SketchTool tool)
+void OccView::StartSketchTool(SketchTool tool, const gp_Ax3& plane, const TopoDS_Shape& context)
 {
   clearModel();
   myTool = tool;
+  mySketchPlane = plane;
+  // La grilla se dibuja sobre el plano del boceto.
+  myViewer->SetPrivilegedPlane(plane);
+
+  if (!context.IsNull())
+  {
+    Handle(AIS_Shape) part = new AIS_Shape(context);
+    part->SetDisplayMode(AIS_Shaded);
+    part->SetColor(Quantity_NOC_SLATEGRAY);
+    part->SetTransparency(0.5);
+    myModelObjects.Append(part);
+    myContext->Display(part, Standard_False);
+    myContext->Deactivate(part); // la pieza es solo referencia: no se selecciona
+
+    // El plano de frente, centrado en la pieza y con toda la pieza a la vista.
+    Bnd_Box box;
+    BRepBndLib::Add(context, box);
+    const gp_Pnt boxCenter = (box.CornerMin().XYZ() + box.CornerMax().XYZ()) / 2.0;
+    const gp_Vec normal(plane.Direction());
+    const gp_Pnt center = boxCenter.Translated(-normal * gp_Vec(plane.Location(), boxCenter).Dot(normal));
+    const double size = std::sqrt(box.SquareExtent());
+    myView->Camera()->SetEyeAndCenter(center.Translated(normal * (2.0 * size + 100.0)), center);
+    myView->Camera()->SetUp(plane.YDirection());
+    myView->SetSize(1.3 * size);
+    myView->ZFitAll();
+    myView->Invalidate();
+
+    updatePreview();
+    updateHint();
+    setFocus();
+    update();
+    return;
+  }
 
   // Plano XY visto desde arriba, con el origen abajo a la izquierda: entra por lo menos
   // la zona de X -15 a 125 mm e Y -10 a 90 mm, sea cual sea la forma de la ventana.
@@ -203,12 +237,58 @@ void OccView::StartSketchTool(SketchTool tool)
   update();
 }
 
+void OccView::StartFacePick()
+{
+  if (myPartObject.IsNull())
+    return;
+  endTool();
+  myPickingFace = true;
+  // Se seleccionan caras sueltas, no la pieza entera.
+  myContext->Deactivate(myPartObject);
+  myContext->Activate(myPartObject, AIS_Shape::SelectionMode(TopAbs_FACE));
+  emit toolHint("Hacé clic en una cara plana de la pieza · Girar: arrastrar con el botón izquierdo · "
+                "Esc cancela");
+  setFocus();
+  update();
+}
+
+void OccView::endFacePick()
+{
+  if (!myPickingFace)
+    return;
+  myPickingFace = false;
+  if (!myPartObject.IsNull() && myContext->IsDisplayed(myPartObject))
+  {
+    myContext->ClearSelected(Standard_False);
+    myContext->Deactivate(myPartObject);
+    myContext->Activate(myPartObject, 0);
+  }
+}
+
+void OccView::pickFace(const Graphic3d_Vec2i& pixel)
+{
+  myContext->MoveTo(pixel.x(), pixel.y(), myView, Standard_False);
+  Handle(StdSelect_BRepOwner) owner = Handle(StdSelect_BRepOwner)::DownCast(myContext->DetectedOwner());
+  if (owner.IsNull() || owner->Shape().ShapeType() != TopAbs_FACE)
+    return;
+  const std::optional<gp_Ax3> plane = SketchPlaneFromFace(TopoDS::Face(owner->Shape()));
+  if (!plane)
+  {
+    emit toolHint("Esa cara no es plana: elegí una cara plana · Esc cancela");
+    return;
+  }
+  endFacePick();
+  emit facePicked(*plane);
+}
+
 void OccView::clearModel()
 {
   if (myView.IsNull())
     initViewer();
 
   endTool();
+  endFacePick();
+  myPartObject.Nullify();
   for (const Handle(AIS_InteractiveObject)& object : myModelObjects)
     myContext->Remove(object, Standard_False);
   myModelObjects.Clear();
@@ -231,6 +311,8 @@ void OccView::resizeEvent(QResizeEvent*)
 
 void OccView::mousePressEvent(QMouseEvent* event)
 {
+  if (event->button() == Qt::LeftButton)
+    myPressPoint = toViewPoint(event->position());
   if (myTool != SketchTool::None && event->button() == Qt::LeftButton)
   {
     addToolPoint(toViewPoint(event->position()));
@@ -252,12 +334,19 @@ void OccView::mousePressEvent(QMouseEvent* event)
 
 void OccView::mouseReleaseEvent(QMouseEvent* event)
 {
+  // Un clic (sin arrastrar) elige la cara; arrastrar gira la vista como siempre.
+  const Graphic3d_Vec2i releasePoint = toViewPoint(event->position());
+  const bool isClick = std::abs(releasePoint.x() - myPressPoint.x()) <= 3
+                    && std::abs(releasePoint.y() - myPressPoint.y()) <= 3;
+  const bool pick = myPickingFace && event->button() == Qt::LeftButton && isClick;
   Qt::MouseButtons buttons = event->buttons();
   if (myTool != SketchTool::None)
     buttons &= ~Qt::LeftButton;
   if (UpdateMouseButtons(toViewPoint(event->position()), toMouseButtons(buttons),
                          toKeyFlags(event->modifiers()), false))
     update();
+  if (pick)
+    pickFace(releasePoint);
 }
 
 void OccView::mouseMoveEvent(QMouseEvent* event)
@@ -306,6 +395,12 @@ void OccView::wheelEvent(QWheelEvent* event)
 
 void OccView::keyPressEvent(QKeyEvent* event)
 {
+  if (myPickingFace && event->key() == Qt::Key_Escape)
+  {
+    endFacePick();
+    emit toolCanceled();
+    return;
+  }
   if (myTool == SketchTool::None)
   {
     if (event->key() == Qt::Key_Escape)
@@ -345,10 +440,17 @@ std::optional<gp_Pnt2d> OccView::pickOnSketchPlane(const Graphic3d_Vec2i& pixel)
     return std::nullopt;
   Standard_Real x, y, z, dx, dy, dz;
   myView->ConvertWithProj(pixel.x(), pixel.y(), x, y, z, dx, dy, dz);
-  if (std::abs(dz) < 1e-9)
+  // Intersección del rayo del mouse con el plano del boceto.
+  const gp_Vec normal(mySketchPlane.Direction());
+  const gp_Vec ray(dx, dy, dz);
+  const double alongNormal = ray.Dot(normal);
+  if (std::abs(alongNormal) < 1e-9)
     return std::nullopt; // la vista mira el plano de canto
-  const double t = -z / dz;
-  return gp_Pnt2d(snap(x + t * dx), snap(y + t * dy));
+  const gp_Pnt start(x, y, z);
+  const double t = gp_Vec(start, mySketchPlane.Location()).Dot(normal) / alongNormal;
+  const gp_Vec local(mySketchPlane.Location(), start.Translated(ray * t));
+  return gp_Pnt2d(snap(local.Dot(gp_Vec(mySketchPlane.XDirection()))),
+                  snap(local.Dot(gp_Vec(mySketchPlane.YDirection()))));
 }
 
 bool OccView::isNearFirstPoint(const Graphic3d_Vec2i& pixel) const
@@ -356,7 +458,8 @@ bool OccView::isNearFirstPoint(const Graphic3d_Vec2i& pixel) const
   if (myToolPoints.empty())
     return false;
   Standard_Integer px = 0, py = 0;
-  myView->Convert(myToolPoints.front().X(), myToolPoints.front().Y(), 0.0, px, py);
+  const gp_Pnt first = toWorld(myToolPoints.front());
+  myView->Convert(first.X(), first.Y(), first.Z(), px, py);
   return std::hypot(px - pixel.x(), py - pixel.y()) <= kCloseDistancePx;
 }
 
@@ -419,8 +522,16 @@ void OccView::finishProfile(const std::vector<gp_Pnt2d>& points)
   emit profileFinished(profile);
 }
 
+gp_Pnt OccView::toWorld(const gp_Pnt2d& point) const
+{
+  return mySketchPlane.Location()
+      .Translated(gp_Vec(mySketchPlane.XDirection()) * point.X() + gp_Vec(mySketchPlane.YDirection()) * point.Y());
+}
+
 void OccView::endTool()
 {
+  if (myTool != SketchTool::None && !myViewer.IsNull())
+    myViewer->SetPrivilegedPlane(gp_Ax3(gp::XOY()));
   myTool = SketchTool::None;
   myToolPoints.clear();
   myCursorPoint.reset();
@@ -458,7 +569,7 @@ void OccView::updatePreview()
   auto addPolyline = [this](const std::vector<gp_Pnt2d>& points, Quantity_NameOfColor color) {
     BRepBuilderAPI_MakePolygon polyline;
     for (const gp_Pnt2d& point : points)
-      polyline.Add(to3d(point));
+      polyline.Add(toWorld(point));
     if (!polyline.IsDone())
       return; // menos de dos puntos distintos
     Handle(AIS_Shape) shape = new AIS_Shape(polyline.Wire());
@@ -467,11 +578,11 @@ void OccView::updatePreview()
     myPreviewObjects.Append(shape);
   };
   addPolyline(fixed, Quantity_NOC_DEEPSKYBLUE1);
-  addPolyline(pending, Quantity_NOC_GRAY70);
+  addPolyline(pending, Quantity_NOC_ORANGE);
 
   if (myCursorPoint)
   {
-    Handle(AIS_Point) marker = new AIS_Point(new Geom_CartesianPoint(to3d(*myCursorPoint)));
+    Handle(AIS_Point) marker = new AIS_Point(new Geom_CartesianPoint(toWorld(*myCursorPoint)));
     marker->SetMarker(Aspect_TOM_PLUS);
     marker->SetColor(Quantity_NOC_YELLOW);
     myPreviewObjects.Append(marker);

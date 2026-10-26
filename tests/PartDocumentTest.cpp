@@ -11,8 +11,11 @@
 #include <BRepGProp.hxx>
 #include <GProp_GProps.hxx>
 #include <STEPControl_Reader.hxx>
+#include <TopExp_Explorer.hxx>
+#include <TopoDS.hxx>
 
 #include <cmath>
+#include <optional>
 #include <cstdio>
 
 namespace
@@ -33,6 +36,30 @@ double volumeOf(const TopoDS_Shape& shape)
   GProp_GProps props;
   BRepGProp::VolumeProperties(shape, props);
   return props.Mass();
+}
+
+// Plano de la cara plana de la pieza cuya normal hacia afuera es `normal`.
+std::optional<gp_Ax3> facePlane(const TopoDS_Shape& shape, const gp_Dir& normal)
+{
+  for (TopExp_Explorer it(shape, TopAbs_FACE); it.More(); it.Next())
+  {
+    const std::optional<gp_Ax3> plane = SketchPlaneFromFace(TopoDS::Face(it.Current()));
+    if (plane && plane->Direction().IsEqual(normal, 1e-9))
+      return plane;
+  }
+  return std::nullopt;
+}
+
+Feature makeFeature(Feature::Kind kind, const gp_Ax3& plane, double x, double y, double w, double h,
+                    double depth, bool throughAll = false)
+{
+  Feature feature;
+  feature.kind = kind;
+  feature.plane = plane;
+  feature.sketch.SetPolygon({gp_Pnt2d(x, y), gp_Pnt2d(x + w, y), gp_Pnt2d(x + w, y + h), gp_Pnt2d(x, y + h)});
+  feature.depth = depth;
+  feature.throughAll = throughAll;
+  return feature;
 }
 
 void writeText(const QString& path, const char* text)
@@ -81,7 +108,7 @@ int main()
   writeText(badPath, R"({"format":"cad-app-part","version":1,"sketch":{"type":"rectangle","width":-4,"height":2}})");
   check(!LoadPart(badPath, &untouched, &error), "rechaza medidas negativas");
 
-  writeText(badPath, R"({"format":"cad-app-part","version":3})");
+  writeText(badPath, R"({"format":"cad-app-part","version":99})");
   check(!LoadPart(badPath, &untouched, &error), "rechaza una versión de formato desconocida");
 
   writeText(badPath, R"({"format":"otro"})");
@@ -180,6 +207,82 @@ int main()
   check(FormatLength(28.2842712) == "28,28", "redondea a 2 decimales con coma");
   check(FormatLength(12.5) == "12,5", "saca los ceros finales");
   check(FormatLength(-0.001) == "0", "no muestra -0");
+
+  // Operaciones sobre un bloque de 40 × 20 × 10 (8000 mm³).
+  {
+    Part block;
+    block.sketch.SetRectangle(40.0, 20.0);
+    block.extrudeDepth = 10.0;
+    const TopoDS_Shape base = BuildPart(block);
+    check(std::abs(volumeOf(base) - 8000.0) < 1e-6, "sin operaciones, BuildPart es la extrusión");
+
+    const std::optional<gp_Ax3> top = facePlane(base, gp::DZ());
+    check(top && std::abs(top->Location().Z() - 10.0) < 1e-9, "la cara de arriba está en z = 10");
+    check(top && top->XDirection().IsEqual(gp::DX(), 1e-9) && top->YDirection().IsEqual(gp::DY(), 1e-9),
+          "en la cara de arriba, las coordenadas del boceto son las X e Y globales");
+    const std::optional<gp_Ax3> side = facePlane(base, gp::DX());
+    check(side && std::abs(side->Location().X() - 40.0) < 1e-9, "la cara derecha está en x = 40");
+    const std::optional<gp_Ax3> bottom = facePlane(base, -gp::DZ());
+
+    if (top && side && bottom)
+    {
+      std::vector<size_t> failed;
+      Part pocket = block;
+      pocket.features.push_back(makeFeature(Feature::Kind::Cut, *top, 5, 5, 10, 10, 4.0));
+      check(std::abs(volumeOf(BuildPart(pocket, &failed)) - 7600.0) < 1e-6 && failed.empty(),
+            "un corte de 10 × 10 y 4 de profundidad resta 400 mm³");
+
+      Part hole = block;
+      hole.features.push_back(makeFeature(Feature::Kind::Cut, *top, 5, 5, 10, 10, 1.0, true));
+      check(std::abs(volumeOf(BuildPart(hole)) - 7000.0) < 1e-6, "un agujero pasante resta 1000 mm³");
+
+      Part boss = block;
+      boss.features.push_back(makeFeature(Feature::Kind::Boss, *top, 20, 5, 10, 10, 5.0));
+      check(std::abs(volumeOf(BuildPart(boss)) - 8500.0) < 1e-6, "un saliente de 10 × 10 × 5 suma 500 mm³");
+
+      // En la cara derecha el eje X del boceto es horizontal y el Y es el Z global.
+      Part sideCut = block;
+      sideCut.features.push_back(makeFeature(Feature::Kind::Cut, *side, 2, 2, 5, 5, 2.0));
+      check(std::abs(volumeOf(BuildPart(sideCut)) - 7950.0) < 1e-6, "un corte en la cara del costado resta 50 mm³");
+
+      Part bottomCut = block;
+      bottomCut.features.push_back(makeFeature(Feature::Kind::Cut, *bottom, 5, -15, 10, 10, 3.0));
+      check(std::abs(volumeOf(BuildPart(bottomCut)) - 7700.0) < 1e-6, "un corte en la cara de abajo resta 300 mm³");
+
+      Part combined = block;
+      combined.features.push_back(makeFeature(Feature::Kind::Boss, *top, 20, 5, 10, 10, 5.0));
+      combined.features.push_back(makeFeature(Feature::Kind::Cut, *top, 5, 5, 10, 10, 1.0, true));
+      failed.clear();
+      check(std::abs(volumeOf(BuildPart(combined, &failed)) - 7500.0) < 1e-6 && failed.empty(),
+            "las operaciones se aplican en orden");
+
+      Part outside = block;
+      outside.features.push_back(makeFeature(Feature::Kind::Cut, *top, 100, 100, 10, 10, 1.0, true));
+      outside.features.push_back(makeFeature(Feature::Kind::Cut, *top, 5, 5, 10, 10, 4.0));
+      failed.clear();
+      const TopoDS_Shape outsideShape = BuildPart(outside, &failed);
+      check(failed.size() == 1 && failed[0] == 0, "un corte que no toca la pieza se marca como fallido");
+      check(std::abs(volumeOf(outsideShape) - 7600.0) < 1e-6, "y las demás operaciones se aplican igual");
+
+      // Las operaciones se guardan y se abren, y la pieza abierta da el mismo sólido.
+      const QString featuresPath = dir.filePath("operaciones.cadp");
+      check(SavePart(combined, featuresPath, &error), "guarda una pieza con operaciones");
+      Part reopened;
+      check(LoadPart(featuresPath, &reopened, &error), "abre una pieza con operaciones");
+      check(reopened.features.size() == 2 && reopened.features[0].kind == Feature::Kind::Boss
+                && reopened.features[1].kind == Feature::Kind::Cut && reopened.features[1].throughAll,
+            "las operaciones conservan su tipo y si son pasantes");
+      check(std::abs(volumeOf(BuildPart(reopened)) - 7500.0) < 1e-6, "la pieza abierta da el mismo sólido");
+
+      const QString sideStepPath = dir.filePath("costado.step");
+      check(ExportStep(BuildPart(sideCut), sideStepPath, &error), "exporta a STEP una pieza con operaciones");
+    }
+
+    writeText(badPath, R"({"format":"cad-app-part","version":3,"sketch":{"type":"polygon","points":[[0,0],[10,0],[10,10]]},"extrude":{"depth":5},"features":[{"type":"cut","plane":{"origin":[0,0,5],"normal":[0,0,1],"xdir":[0,1,1]},"sketch":{"type":"polygon","points":[[1,1],[2,1],[2,2]]},"depth":1}]})");
+    check(!LoadPart(badPath, &untouched, &error), "rechaza un plano con ejes no perpendiculares");
+    writeText(badPath, R"({"format":"cad-app-part","version":3,"sketch":{"type":"polygon","points":[[0,0],[10,0],[10,10]]},"features":[]})");
+    check(!LoadPart(badPath, &untouched, &error), "rechaza operaciones sin extrusión");
+  }
 
   // Las piezas del formato anterior (versión 1, rectángulo) se siguen abriendo.
   const QString v1Path = dir.filePath("v1.cadp");

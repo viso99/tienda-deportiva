@@ -1,18 +1,9 @@
 #pragma once
 
-#include "Sketch.h"
+#include "Part.h"
 
 #include <QString>
 #include <TopoDS_Shape.hxx>
-
-#include <optional>
-
-// Pieza paramétrica: el boceto y, si ya se extruyó, la distancia de extrusión (mm).
-struct Part
-{
-  Sketch sketch;
-  std::optional<double> extrudeDepth;
-};
 
 // Formato propio (.cadp): JSON con los parámetros de la pieza, no la geometría.
 // Al abrirlo, la geometría se reconstruye a partir de los parámetros.

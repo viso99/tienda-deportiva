@@ -10,6 +10,8 @@ Términos de CAD explicados de forma simple. Usá estas palabras con Sergio y en
 - **Restricción:** regla geométrica del boceto, por ejemplo "estas dos líneas son paralelas" o "esta línea es horizontal".
 - **Extrusión:** "estirar" un boceto 2D en una dirección para obtener un sólido 3D. Es el núcleo de la v1 (D-5).
 - **Operación (feature):** cada paso que modifica la pieza: extrusión, agujero, redondeo, etc.
+- **Corte / agujero:** operación que resta material: un contorno dibujado sobre una cara se "hunde" en la pieza una profundidad. **Pasante** o "a través de todo": atraviesa la pieza entera.
+- **Saliente:** operación que suma material: un contorno dibujado sobre una cara se extruye hacia afuera.
 - **Paramétrico:** el modelo guarda las medidas y los pasos, así que si cambiás una cota la pieza se recalcula sola. Así funcionan SolidWorks y NX.
 - **Motor geométrico (kernel):** la librería que hace las cuentas de los sólidos (unir, restar, redondear). Ejemplos: Parasolid (NX, SolidWorks) y Open CASCADE (libre, usado por FreeCAD).
 - **Plano (dibujo técnico):** representación 2D con vistas y cotas, para fabricar. Estilo AutoCAD.
