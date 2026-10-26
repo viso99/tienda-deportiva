@@ -37,7 +37,7 @@ double volumeOf(const TopoDS_Shape& shape)
 void writeText(const QString& path, const char* text)
 {
   QFile file(path);
-  file.open(QIODevice::WriteOnly);
+  check(file.open(QIODevice::WriteOnly), "se puede escribir el archivo de prueba");
   file.write(text);
 }
 } // namespace
