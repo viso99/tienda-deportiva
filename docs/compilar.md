@@ -2,7 +2,7 @@
 
 ## En Windows (destino principal)
 
-**[Verificado] 2026-10-26** en la PC de Sergio (Windows 11): compila, arranca, y el boceto de 40 × 20 extruido 10 funciona. Versiones: VS 2022 Build Tools 17.14 (MSVC 19.44), SDK de Windows 10.0.26100, Qt 6.11.2, Open CASCADE 8.0.1 y vcpkg 2026-09-26.
+**[Verificado] 2026-10-26** en la PC de Sergio (Windows 11): compila y arranca, y el flujo completo funciona: boceto de 40 × 20, extrusión de 10, giro con el mouse y recálculo al cambiar a 100 × 30. Versiones: VS 2022 Build Tools 17.14 (MSVC 19.44), SDK de Windows 10.0.26100, Qt 6.11.2, Open CASCADE 8.0.1 y vcpkg 2026-09-26.
 
 Una sola vez:
 
