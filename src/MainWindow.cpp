@@ -39,16 +39,36 @@ MainWindow::MainWindow(QWidget* parent)
   fileMenu->addSeparator();
   fileMenu->addAction("Salir", QKeySequence::Quit, this, &QWidget::close);
 
-  QAction* rectangleAction = new QAction("Rectángulo…", this);
-  rectangleAction->setStatusTip("Dibujar un rectángulo con medidas en el plano XY");
+  QAction* lineAction = new QAction("Línea", this);
+  lineAction->setShortcut(Qt::Key_L);
+  lineAction->setStatusTip("Dibujar con el mouse un contorno cerrado de líneas, clic a clic");
+  connect(lineAction, &QAction::triggered, this, [this] { startSketchTool(SketchTool::Line); });
+
+  QAction* mouseRectangleAction = new QAction("Rectángulo", this);
+  mouseRectangleAction->setShortcut(Qt::Key_R);
+  mouseRectangleAction->setStatusTip("Dibujar con el mouse un rectángulo por dos esquinas opuestas");
+  connect(mouseRectangleAction, &QAction::triggered, this,
+          [this] { startSketchTool(SketchTool::Rectangle); });
+
+  QAction* rectangleAction = new QAction("Rectángulo con medidas…", this);
+  rectangleAction->setStatusTip("Escribir el ancho y el alto de un rectángulo en el plano XY");
   connect(rectangleAction, &QAction::triggered, this, &MainWindow::drawRectangle);
+
+  connect(myView, &OccView::profileFinished, this, &MainWindow::setProfile);
+  connect(myView, &OccView::toolCanceled, this, &MainWindow::showModel);
+  connect(myView, &OccView::toolHint, this, [this](const QString& text) { statusBar()->showMessage(text); });
 
   myExtrudeAction->setStatusTip("Convertir el boceto en una pieza 3D estirándolo en Z");
   connect(myExtrudeAction, &QAction::triggered, this, &MainWindow::extrude);
 
-  menuBar()->addMenu("Boceto")->addAction(rectangleAction);
+  QMenu* sketchMenu = menuBar()->addMenu("Boceto");
+  sketchMenu->addAction(lineAction);
+  sketchMenu->addAction(mouseRectangleAction);
+  sketchMenu->addAction(rectangleAction);
   menuBar()->addMenu("Operaciones")->addAction(myExtrudeAction);
   QToolBar* toolBar = addToolBar("Herramientas");
+  toolBar->addAction(lineAction);
+  toolBar->addAction(mouseRectangleAction);
   toolBar->addAction(rectangleAction);
   toolBar->addAction(myExtrudeAction);
 
@@ -144,6 +164,20 @@ void MainWindow::drawRectangle()
   showModel();
 }
 
+void MainWindow::startSketchTool(SketchTool tool)
+{
+  // El perfil nuevo reemplaza al actual; si la pieza ya estaba extruida, se recalcula al cerrarlo.
+  myView->StartSketchTool(tool);
+}
+
+void MainWindow::setProfile(const std::vector<gp_Pnt2d>& points)
+{
+  if (!myPart.sketch.SetPolygon(points))
+    return; // la vista solo entrega contornos válidos
+  markModified();
+  showModel();
+}
+
 void MainWindow::extrude()
 {
   bool ok = false;
@@ -218,23 +252,26 @@ void MainWindow::updateTitle()
 void MainWindow::showModel()
 {
   const Sketch& sketch = myPart.sketch;
+  const QString profile = sketch.IsRectangle()
+                              ? QString("rectángulo de %1 × %2 mm").arg(sketch.Width()).arg(sketch.Height())
+                              : QString("contorno de %1 lados (%2 × %3 mm)")
+                                    .arg(sketch.Points().size())
+                                    .arg(sketch.Width())
+                                    .arg(sketch.Height());
   if (myPart.extrudeDepth)
   {
     myView->ShowPart(ExtrudeSketch(sketch, *myPart.extrudeDepth));
-    statusBar()->showMessage(QString("Pieza: %1 × %2 × %3 mm")
-                                 .arg(sketch.Width())
-                                 .arg(sketch.Height())
-                                 .arg(*myPart.extrudeDepth));
+    statusBar()->showMessage(QString("Pieza: %1, extruido %2 mm").arg(profile).arg(*myPart.extrudeDepth));
   }
   else if (sketch.HasProfile())
   {
     myView->ShowSketch(sketch);
-    statusBar()->showMessage(QString("Boceto: rectángulo de %1 × %2 mm")
-                                 .arg(sketch.Width())
-                                 .arg(sketch.Height()));
+    statusBar()->showMessage(QString("Boceto: %1").arg(profile));
   }
   else
   {
     myView->ShowSketch(sketch);
+    statusBar()->showMessage("Dibujá un boceto con Boceto → Línea o Rectángulo · "
+                             "Girar: botón izquierdo · Mover: botón del medio · Zoom: rueda");
   }
 }

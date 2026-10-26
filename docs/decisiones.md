@@ -37,3 +37,8 @@ Después de la v1, lo primero que se suma es **guardar, abrir y exportar a STEP*
 **D-8 · 2026-10-26 · vigente (decisión técnica, se puede revisar)**
 Formato propio **`.cadp`**: JSON con los **parámetros** de la pieza (boceto y extrusión), no la geometría. Al abrir, la geometría se reconstruye. Lleva `format` y `version` para poder evolucionar. Para intercambio, **STEP AP214 en milímetros**.
 *Por qué:* guardar parámetros mantiene la pieza editable (paramétrica), y JSON es legible y fácil de migrar. STEP es el estándar que abren SolidWorks, NX y casi cualquier CAD. La extensión `.cadp` es provisoria hasta que haya nombre de producto.
+
+**D-9 · 2026-10-26 · vigente**
+Siguiente paso después de D-7: **dibujar el boceto con el mouse**. Se hace en dos partes: primero líneas y rectángulos dibujados en la vista (contorno cerrado de cualquier forma, extruible); después, cotas editables.
+*Por qué:* Sergio lo eligió entre tres opciones (también estaban más operaciones y pulir lo que ya hay). Es lo que hace que se sienta un CAD de verdad, y las operaciones rinden más cuando el boceto puede tener cualquier forma.
+Detalles técnicos (se pueden revisar): el perfil se guarda como lista de vértices (formato `.cadp` versión 2, que sigue abriendo la versión 1 de D-8); los puntos se ajustan al milímetro; un contorno que se cruza consigo mismo se rechaza.

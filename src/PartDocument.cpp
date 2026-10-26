@@ -1,6 +1,7 @@
 #include "PartDocument.h"
 
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
@@ -12,7 +13,9 @@
 namespace
 {
 const char* const kFormatName = "cad-app-part";
-const int kFormatVersion = 1;
+// Versión 1: el boceto es un rectángulo con una esquina en el origen (ancho y alto).
+// Versión 2: el boceto es un contorno cerrado (lista de vértices). Se siguen abriendo las dos.
+const int kFormatVersion = 2;
 
 bool readPositive(const QJsonObject& object, const char* key, double* value)
 {
@@ -21,6 +24,33 @@ bool readPositive(const QJsonObject& object, const char* key, double* value)
     return false;
   *value = jsonValue.toDouble();
   return true;
+}
+
+bool readRectangle(const QJsonObject& object, Sketch* sketch)
+{
+  double width = 0.0;
+  double height = 0.0;
+  if (object.value("type").toString() != "rectangle"
+      || !readPositive(object, "width", &width)
+      || !readPositive(object, "height", &height))
+    return false;
+  sketch->SetRectangle(width, height);
+  return true;
+}
+
+bool readPolygon(const QJsonObject& object, Sketch* sketch)
+{
+  if (object.value("type").toString() != "polygon" || !object.value("points").isArray())
+    return false;
+  std::vector<gp_Pnt2d> points;
+  for (const QJsonValue& value : object.value("points").toArray())
+  {
+    const QJsonArray pair = value.toArray();
+    if (pair.size() != 2 || !pair[0].isDouble() || !pair[1].isDouble())
+      return false;
+    points.emplace_back(pair[0].toDouble(), pair[1].toDouble());
+  }
+  return sketch->SetPolygon(points);
 }
 } // namespace
 
@@ -33,9 +63,11 @@ bool SavePart(const Part& part, const QString& path, QString* error)
   if (part.sketch.HasProfile())
   {
     QJsonObject sketch;
-    sketch["type"] = "rectangle";
-    sketch["width"] = part.sketch.Width();
-    sketch["height"] = part.sketch.Height();
+    QJsonArray points;
+    for (const gp_Pnt2d& point : part.sketch.Points())
+      points.append(QJsonArray{point.X(), point.Y()});
+    sketch["type"] = "polygon";
+    sketch["points"] = points;
     root["sketch"] = sketch;
   }
   if (part.extrudeDepth)
@@ -84,7 +116,8 @@ bool LoadPart(const QString& path, Part* part, QString* error)
     *error = "El archivo no es una pieza de esta aplicación.";
     return false;
   }
-  if (root.value("version").toInt() != kFormatVersion)
+  const int version = root.value("version").toInt();
+  if (version != 1 && version != kFormatVersion)
   {
     *error = "La pieza se guardó con una versión del formato que esta aplicación no conoce.";
     return false;
@@ -94,16 +127,13 @@ bool LoadPart(const QString& path, Part* part, QString* error)
   if (root.contains("sketch"))
   {
     const QJsonObject sketch = root.value("sketch").toObject();
-    double width = 0.0;
-    double height = 0.0;
-    if (sketch.value("type").toString() != "rectangle"
-        || !readPositive(sketch, "width", &width)
-        || !readPositive(sketch, "height", &height))
+    const bool valid = version == 1 ? readRectangle(sketch, &loaded.sketch)
+                                    : readPolygon(sketch, &loaded.sketch);
+    if (!valid)
     {
       *error = "El boceto guardado no es válido.";
       return false;
     }
-    loaded.sketch.SetRectangle(width, height);
   }
   if (root.contains("extrude"))
   {
