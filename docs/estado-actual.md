@@ -13,7 +13,7 @@ Hechos los pasos 2 (**ventana con vista 3D**), 3 (**boceto con medidas**) y 4 (*
 
 **Dibujo con el mouse (D-9, primera parte):** [Verificado] 2026-10-26 en Linux y en Windows (monitor al 125 %).
 **Cotas editables (D-9, segunda parte):** [Verificado] 2026-10-26 en Linux y en Windows, junto con los arreglos de origen visible, cotas con coma y barra de estado.
-**Agujeros, cortes y salientes (D-10):** [Verificado] 2026-10-26 en Linux; **falta probarlo en Windows**.
+**Agujeros, cortes y salientes (D-10):** [Verificado] 2026-10-26 en Linux y en Windows.
 
 | Archivo | Qué hace |
 |---|---|
