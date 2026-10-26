@@ -57,6 +57,17 @@ MainWindow::MainWindow(QWidget* parent)
   lineAction->setStatusTip("Dibujar con el mouse un contorno cerrado de líneas, clic a clic");
   connect(lineAction, &QAction::triggered, this, [this] { startSketchTool(SketchTool::Line); });
 
+  QAction* arcAction = new QAction("Arco", this);
+  arcAction->setShortcut(Qt::Key_A);
+  arcAction->setStatusTip("Dibujar con el mouse lados en arco, por el final y un punto de paso; "
+                          "con L y A se mezclan líneas y arcos en el mismo contorno");
+  connect(arcAction, &QAction::triggered, this, [this] { startSketchTool(SketchTool::Arc); });
+
+  QAction* circleAction = new QAction("Círculo", this);
+  circleAction->setShortcut(Qt::Key_C);
+  circleAction->setStatusTip("Dibujar con el mouse un círculo por el centro y un punto del borde");
+  connect(circleAction, &QAction::triggered, this, [this] { startSketchTool(SketchTool::Circle); });
+
   QAction* mouseRectangleAction = new QAction("Rectángulo", this);
   mouseRectangleAction->setShortcut(Qt::Key_R);
   mouseRectangleAction->setStatusTip("Dibujar con el mouse un rectángulo por dos esquinas opuestas");
@@ -93,7 +104,9 @@ MainWindow::MainWindow(QWidget* parent)
 
   QMenu* sketchMenu = menuBar()->addMenu("Boceto");
   sketchMenu->addAction(lineAction);
+  sketchMenu->addAction(arcAction);
   sketchMenu->addAction(mouseRectangleAction);
+  sketchMenu->addAction(circleAction);
   sketchMenu->addAction(rectangleAction);
   sketchMenu->addSeparator();
   sketchMenu->addAction(myEditSketchAction);
@@ -105,7 +118,9 @@ MainWindow::MainWindow(QWidget* parent)
   operationsMenu->addAction(myRemoveFeatureAction);
   QToolBar* toolBar = addToolBar("Herramientas");
   toolBar->addAction(lineAction);
+  toolBar->addAction(arcAction);
   toolBar->addAction(mouseRectangleAction);
+  toolBar->addAction(circleAction);
   toolBar->addAction(rectangleAction);
   toolBar->addAction(myExtrudeAction);
   toolBar->addAction(myEditSketchAction);
@@ -115,7 +130,7 @@ MainWindow::MainWindow(QWidget* parent)
 
   updateActions();
   updateTitle();
-  showStatus("Dibujá un boceto con Boceto → Línea o Rectángulo · "
+  showStatus("Dibujá un boceto con Boceto → Línea, Arco, Rectángulo o Círculo · "
              "Girar: botón izquierdo · Mover: botón del medio · Zoom: rueda");
 }
 
@@ -208,6 +223,12 @@ void MainWindow::drawRectangle()
 
 void MainWindow::startSketchTool(SketchTool tool)
 {
+  // Con un contorno a medias, Línea y Arco cambian el tipo del próximo lado sin borrar nada.
+  if (myView->IsDrawingChain() && (tool == SketchTool::Line || tool == SketchTool::Arc))
+  {
+    myView->SwitchChainTool(tool);
+    return;
+  }
   // Con una cara elegida, se dibuja el contorno de la operación sobre ella.
   if (myPendingPlane)
   {
@@ -233,7 +254,7 @@ void MainWindow::startFeature(Feature::Kind kind)
 void MainWindow::sketchOnFace(const gp_Ax3& plane)
 {
   myPendingPlane = plane;
-  // Empieza con el rectángulo, lo más común en agujeros y cortes; con L se pasa a líneas.
+  // Empieza con el rectángulo, lo más común en cortes; con C se pasa a círculo y con L o A a líneas y arcos.
   myView->StartSketchTool(SketchTool::Rectangle, plane, myShape);
 }
 
@@ -242,16 +263,12 @@ void MainWindow::cancelTool()
   showModel();
 }
 
-void MainWindow::addFeature(const std::vector<gp_Pnt2d>& points)
+void MainWindow::addFeature(const Sketch& profile)
 {
   Feature feature;
   feature.kind = *myPendingKind;
   feature.plane = *myPendingPlane;
-  if (!feature.sketch.SetPolygon(points))
-  {
-    showModel();
-    return; // la vista solo entrega contornos válidos
-  }
+  feature.sketch = profile;
 
   const bool isCut = feature.kind == Feature::Kind::Cut;
   FeatureDialog dialog(isCut, isCut ? 5.0 : 10.0, this);
@@ -289,31 +306,38 @@ void MainWindow::removeLastFeature()
   showModel();
 }
 
-void MainWindow::setProfile(const std::vector<gp_Pnt2d>& points)
+void MainWindow::setProfile(const Sketch& profile)
 {
   if (myPendingKind && myPendingPlane)
   {
-    addFeature(points);
+    addFeature(profile);
     return;
   }
-  if (!myPart.sketch.SetPolygon(points))
-    return; // la vista solo entrega contornos válidos
+  myPart.sketch = profile;
   markModified();
   showModel();
 }
 
 void MainWindow::editDimension(size_t edgeIndex)
 {
+  const Sketch::DimensionKind kind = myPart.sketch.KindOfDimension(edgeIndex);
+  const char* const label = kind == Sketch::DimensionKind::Diameter ? "Diámetro del círculo (mm):"
+                          : kind == Sketch::DimensionKind::Radius   ? "Radio del arco (mm):"
+                                                                    : "Largo del lado (mm):";
   bool ok = false;
-  const double length = QInputDialog::getDouble(this, "Cambiar cota", "Largo del lado (mm):",
-                                                myPart.sketch.EdgeLength(edgeIndex),
-                                                0.01, 100000.0, 2, &ok);
+  const double value = QInputDialog::getDouble(this, "Cambiar cota", label,
+                                               myPart.sketch.DimensionValue(edgeIndex),
+                                               0.01, 100000.0, 2, &ok);
   if (!ok)
     return;
-  if (!myPart.sketch.SetEdgeLength(edgeIndex, length))
+  if (!myPart.sketch.SetDimensionValue(edgeIndex, value))
   {
     QMessageBox::warning(this, "Cambiar cota",
-                         "Con esa medida el contorno se cruzaría consigo mismo. Probá con otra.");
+                         kind == Sketch::DimensionKind::Radius
+                             ? QString("El radio no puede ser menor que la mitad de la distancia entre los "
+                                       "extremos del arco (%1 mm), ni hacer que el contorno se cruce.")
+                                   .arg(FormatLength(myPart.sketch.EdgeLength(edgeIndex) / 2.0))
+                             : QString("Con esa medida el contorno se cruzaría consigo mismo. Probá con otra."));
     return;
   }
   markModified();
@@ -401,9 +425,13 @@ void MainWindow::showModel()
 {
   const Sketch& sketch = myPart.sketch;
   const QString size = QString("%1 × %2 mm").arg(FormatLength(sketch.Width()), FormatLength(sketch.Height()));
-  const QString profile = sketch.IsRectangle()
-                              ? QString("rectángulo de %1").arg(size)
-                              : QString("contorno de %1 lados (%2)").arg(sketch.Points().size()).arg(size);
+  QString profile;
+  if (sketch.IsCircle())
+    profile = QString::fromUtf8("círculo de Ø %1 mm").arg(FormatLength(2.0 * sketch.CircleRadius()));
+  else if (sketch.IsRectangle())
+    profile = QString("rectángulo de %1").arg(size);
+  else
+    profile = QString("contorno de %1 lados (%2)").arg(sketch.Points().size()).arg(size);
   // Mostrar el modelo cancela lo que la vista estuviera haciendo (elegir cara, dibujar),
   // así que también se descarta la operación a medias.
   myPendingKind.reset();
@@ -438,7 +466,7 @@ void MainWindow::showModel()
   else
   {
     myView->ShowSketch(sketch);
-    showStatus("Dibujá un boceto con Boceto → Línea o Rectángulo · "
+    showStatus("Dibujá un boceto con Boceto → Línea, Arco, Rectángulo o Círculo · "
                "Girar: botón izquierdo · Mover: botón del medio · Zoom: rueda");
   }
 }
