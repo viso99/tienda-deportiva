@@ -40,6 +40,7 @@ public:
   const Handle(AIS_InteractiveContext)& Context() const { return myContext; }
 
   // Muestra el boceto (contorno y cotas) en lugar del modelo anterior y lo mira desde arriba.
+  // Con doble clic en una cota se emite dimensionActivated.
   void ShowSketch(const Sketch& sketch);
   // Muestra la pieza sólida en lugar del modelo anterior, en vista isométrica.
   void ShowPart(const TopoDS_Shape& part);
@@ -52,6 +53,10 @@ public:
 signals:
   void profileFinished(const std::vector<gp_Pnt2d>& points);
   void toolCanceled();
+  // Doble clic en la cota del lado `edgeIndex` del boceto mostrado.
+  void dimensionActivated(size_t edgeIndex);
+  // Esc sin ninguna herramienta activa.
+  void escapePressed();
   // Texto de ayuda para la barra de estado mientras se dibuja.
   void toolHint(const QString& text);
 
@@ -61,6 +66,7 @@ protected:
   void mousePressEvent(QMouseEvent* event) override;
   void mouseReleaseEvent(QMouseEvent* event) override;
   void mouseMoveEvent(QMouseEvent* event) override;
+  void mouseDoubleClickEvent(QMouseEvent* event) override;
   void wheelEvent(QWheelEvent* event) override;
   void keyPressEvent(QKeyEvent* event) override;
 
@@ -85,6 +91,8 @@ private:
   Handle(V3d_View) myView;
   Handle(AIS_InteractiveContext) myContext;
   NCollection_Sequence<Handle(AIS_InteractiveObject)> myModelObjects;
+  // Cotas del boceto mostrado y el lado que mide cada una.
+  std::vector<std::pair<Handle(AIS_InteractiveObject), size_t>> myDimensions;
 
   SketchTool myTool = SketchTool::None;
   std::vector<gp_Pnt2d> myToolPoints;     // puntos ya marcados

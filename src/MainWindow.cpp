@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include "Extrude.h"
+#include "Format.h"
 #include "OccView.h"
 #include "RectangleDialog.h"
 
@@ -8,6 +9,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QInputDialog>
+#include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QStatusBar>
@@ -23,9 +25,14 @@ MainWindow::MainWindow(QWidget* parent)
   : QMainWindow(parent),
     myView(new OccView(this)),
     myExtrudeAction(new QAction("Extruir…", this)),
-    myExportStepAction(new QAction("Exportar a STEP…", this))
+    myExportStepAction(new QAction("Exportar a STEP…", this)),
+    myEditSketchAction(new QAction("Editar boceto", this)),
+    myStatusLabel(new QLabel(this))
 {
   setCentralWidget(myView);
+  // Los mensajes van en una etiqueta fija y no con showMessage: la ayuda de los botones
+  // (status tips) usa el mensaje temporal y, al borrarse, se llevaba nuestro texto.
+  statusBar()->addWidget(myStatusLabel, 1);
 
   QMenu* fileMenu = menuBar()->addMenu("Archivo");
   fileMenu->addAction("Nuevo", QKeySequence::New, this, &MainWindow::newPart);
@@ -54,9 +61,16 @@ MainWindow::MainWindow(QWidget* parent)
   rectangleAction->setStatusTip("Escribir el ancho y el alto de un rectángulo en el plano XY");
   connect(rectangleAction, &QAction::triggered, this, &MainWindow::drawRectangle);
 
+  myEditSketchAction->setCheckable(true);
+  myEditSketchAction->setShortcut(Qt::Key_E);
+  myEditSketchAction->setStatusTip("Ver el boceto de la pieza para cambiar sus cotas");
+  connect(myEditSketchAction, &QAction::toggled, this, &MainWindow::showModel);
+
   connect(myView, &OccView::profileFinished, this, &MainWindow::setProfile);
+  connect(myView, &OccView::dimensionActivated, this, &MainWindow::editDimension);
+  connect(myView, &OccView::escapePressed, this, [this] { myEditSketchAction->setChecked(false); });
   connect(myView, &OccView::toolCanceled, this, &MainWindow::showModel);
-  connect(myView, &OccView::toolHint, this, [this](const QString& text) { statusBar()->showMessage(text); });
+  connect(myView, &OccView::toolHint, this, [this](const QString& text) { showStatus(text); });
 
   myExtrudeAction->setStatusTip("Convertir el boceto en una pieza 3D estirándolo en Z");
   connect(myExtrudeAction, &QAction::triggered, this, &MainWindow::extrude);
@@ -65,16 +79,20 @@ MainWindow::MainWindow(QWidget* parent)
   sketchMenu->addAction(lineAction);
   sketchMenu->addAction(mouseRectangleAction);
   sketchMenu->addAction(rectangleAction);
+  sketchMenu->addSeparator();
+  sketchMenu->addAction(myEditSketchAction);
   menuBar()->addMenu("Operaciones")->addAction(myExtrudeAction);
   QToolBar* toolBar = addToolBar("Herramientas");
   toolBar->addAction(lineAction);
   toolBar->addAction(mouseRectangleAction);
   toolBar->addAction(rectangleAction);
   toolBar->addAction(myExtrudeAction);
+  toolBar->addAction(myEditSketchAction);
 
   updateActions();
   updateTitle();
-  statusBar()->showMessage("Girar: botón izquierdo · Mover: botón del medio · Zoom: rueda");
+  showStatus("Dibujá un boceto con Boceto → Línea o Rectángulo · "
+             "Girar: botón izquierdo · Mover: botón del medio · Zoom: rueda");
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)
@@ -148,7 +166,7 @@ void MainWindow::exportStep()
     QMessageBox::warning(this, "Exportar a STEP", QString("No se pudo exportar la pieza.\n\n%1").arg(error));
     return;
   }
-  statusBar()->showMessage(QString("Exportado a %1").arg(QFileInfo(path).fileName()));
+  showStatus(QString("Exportado a %1").arg(QFileInfo(path).fileName()));
 }
 
 void MainWindow::drawRectangle()
@@ -167,6 +185,8 @@ void MainWindow::drawRectangle()
 void MainWindow::startSketchTool(SketchTool tool)
 {
   // El perfil nuevo reemplaza al actual; si la pieza ya estaba extruida, se recalcula al cerrarlo.
+  // Primero se sale de "Editar boceto", porque mostrar el modelo cancela la herramienta.
+  myEditSketchAction->setChecked(false);
   myView->StartSketchTool(tool);
 }
 
@@ -174,6 +194,24 @@ void MainWindow::setProfile(const std::vector<gp_Pnt2d>& points)
 {
   if (!myPart.sketch.SetPolygon(points))
     return; // la vista solo entrega contornos válidos
+  markModified();
+  showModel();
+}
+
+void MainWindow::editDimension(size_t edgeIndex)
+{
+  bool ok = false;
+  const double length = QInputDialog::getDouble(this, "Cambiar cota", "Largo del lado (mm):",
+                                                myPart.sketch.EdgeLength(edgeIndex),
+                                                0.01, 100000.0, 2, &ok);
+  if (!ok)
+    return;
+  if (!myPart.sketch.SetEdgeLength(edgeIndex, length))
+  {
+    QMessageBox::warning(this, "Cambiar cota",
+                         "Con esa medida el contorno se cruzaría consigo mismo. Probá con otra.");
+    return;
+  }
   markModified();
   showModel();
 }
@@ -188,6 +226,7 @@ void MainWindow::extrude()
     return;
 
   myPart.extrudeDepth = depth;
+  myEditSketchAction->setChecked(false);
   markModified();
   showModel();
 }
@@ -196,6 +235,7 @@ void MainWindow::setPart(const Part& part, const QString& filePath)
 {
   myPart = part;
   myFilePath = filePath;
+  myEditSketchAction->setChecked(false);
   myModified = false;
   updateActions();
   updateTitle();
@@ -233,7 +273,7 @@ bool MainWindow::writeTo(const QString& filePath)
   myFilePath = filePath;
   myModified = false;
   updateTitle();
-  statusBar()->showMessage(QString("Guardado en %1").arg(QFileInfo(filePath).fileName()));
+  showStatus(QString("Guardado en %1").arg(QFileInfo(filePath).fileName()));
   return true;
 }
 
@@ -241,6 +281,7 @@ void MainWindow::updateActions()
 {
   myExtrudeAction->setEnabled(myPart.sketch.HasProfile());
   myExportStepAction->setEnabled(myPart.extrudeDepth.has_value());
+  myEditSketchAction->setEnabled(myPart.extrudeDepth.has_value());
 }
 
 void MainWindow::updateTitle()
@@ -252,26 +293,32 @@ void MainWindow::updateTitle()
 void MainWindow::showModel()
 {
   const Sketch& sketch = myPart.sketch;
+  const QString size = QString("%1 × %2 mm").arg(FormatLength(sketch.Width()), FormatLength(sketch.Height()));
   const QString profile = sketch.IsRectangle()
-                              ? QString("rectángulo de %1 × %2 mm").arg(sketch.Width()).arg(sketch.Height())
-                              : QString("contorno de %1 lados (%2 × %3 mm)")
-                                    .arg(sketch.Points().size())
-                                    .arg(sketch.Width())
-                                    .arg(sketch.Height());
-  if (myPart.extrudeDepth)
+                              ? QString("rectángulo de %1").arg(size)
+                              : QString("contorno de %1 lados (%2)").arg(sketch.Points().size()).arg(size);
+  if (myPart.extrudeDepth && !myEditSketchAction->isChecked())
   {
     myView->ShowPart(ExtrudeSketch(sketch, *myPart.extrudeDepth));
-    statusBar()->showMessage(QString("Pieza: %1, extruido %2 mm").arg(profile).arg(*myPart.extrudeDepth));
+    showStatus(QString("Pieza: %1, extruido %2 mm").arg(profile, FormatLength(*myPart.extrudeDepth)));
   }
   else if (sketch.HasProfile())
   {
     myView->ShowSketch(sketch);
-    statusBar()->showMessage(QString("Boceto: %1").arg(profile));
+    showStatus(myPart.extrudeDepth
+                   ? QString("Editando el boceto: %1 · Doble clic en una cota para cambiarla · "
+                             "Esc vuelve a la pieza").arg(profile)
+                   : QString("Boceto: %1 · Doble clic en una cota para cambiarla").arg(profile));
   }
   else
   {
     myView->ShowSketch(sketch);
-    statusBar()->showMessage("Dibujá un boceto con Boceto → Línea o Rectángulo · "
-                             "Girar: botón izquierdo · Mover: botón del medio · Zoom: rueda");
+    showStatus("Dibujá un boceto con Boceto → Línea o Rectángulo · "
+               "Girar: botón izquierdo · Mover: botón del medio · Zoom: rueda");
   }
+}
+
+void MainWindow::showStatus(const QString& text)
+{
+  myStatusLabel->setText(text);
 }

@@ -4,6 +4,7 @@
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakePolygon.hxx>
 #include <gp_Pnt.hxx>
+#include <gp_Vec2d.hxx>
 
 #include <algorithm>
 #include <cmath>
@@ -122,17 +123,17 @@ TopoDS_Face Sketch::Face() const
   return BRepBuilderAPI_MakeFace(Wire(), Standard_True).Face();
 }
 
-std::vector<TopoDS_Edge> Sketch::DimensionedEdges() const
+std::vector<Sketch::DimensionedEdge> Sketch::DimensionedEdges() const
 {
-  std::vector<gp_Pnt2d> points = myPoints;
-  if (signedArea2(points) < 0.0)
-    std::reverse(points.begin(), points.end());
+  const size_t count = myPoints.size();
+  const bool clockwise = signedArea2(myPoints) < 0.0;
 
-  std::vector<TopoDS_Edge> edges;
-  for (size_t i = 0; i < points.size(); ++i)
+  std::vector<DimensionedEdge> edges;
+  for (size_t i = 0; i < count; ++i)
   {
-    const gp_Pnt2d& a = points[i];
-    const gp_Pnt2d& b = points[(i + 1) % points.size()];
+    // En sentido horario se recorre el lado i al revés, del vértice i+1 al i.
+    const gp_Pnt2d& a = clockwise ? myPoints[(i + 1) % count] : myPoints[i];
+    const gp_Pnt2d& b = clockwise ? myPoints[i] : myPoints[(i + 1) % count];
     if (IsRectangle())
     {
       // Recorrido antihorario: el lado inferior va hacia +X y el derecho hacia +Y.
@@ -141,9 +142,47 @@ std::vector<TopoDS_Edge> Sketch::DimensionedEdges() const
       if (!bottom && !right)
         continue;
     }
-    edges.push_back(BRepBuilderAPI_MakeEdge(to3d(a), to3d(b)).Edge());
+    edges.push_back({i, BRepBuilderAPI_MakeEdge(to3d(a), to3d(b)).Edge()});
   }
   return edges;
+}
+
+double Sketch::EdgeLength(size_t index) const
+{
+  return myPoints[index].Distance(myPoints[(index + 1) % myPoints.size()]);
+}
+
+bool Sketch::SetEdgeLength(size_t index, double length)
+{
+  const size_t count = myPoints.size();
+  if (index >= count || !(length > kTolerance) || !std::isfinite(length))
+    return false;
+
+  const gp_Pnt2d& a = myPoints[index];
+  const gp_Pnt2d& b = myPoints[(index + 1) % count];
+  const gp_Vec2d direction(a, b);
+  const double current = direction.Magnitude();
+  const gp_Vec2d shift = direction.Normalized() * (length - current);
+
+  std::vector<gp_Pnt2d> points = myPoints;
+  size_t k = (index + 1) % count;
+  points[k].Translate(shift);
+  // Arrastra los vértices siguientes mientras el lado que llega a ellos sea perpendicular.
+  // Nunca llega al vértice inicial, que queda fijo.
+  for (size_t moved = 1; moved + 1 < count; ++moved)
+  {
+    const size_t next = (k + 1) % count;
+    const gp_Vec2d side(myPoints[k], myPoints[next]);
+    if (std::abs(side.Normalized().Dot(direction.Normalized())) > 1e-9)
+      break;
+    points[next].Translate(shift);
+    k = next;
+  }
+
+  if (!IsValidProfile(points))
+    return false;
+  myPoints = points;
+  return true;
 }
 
 bool Sketch::IsValidProfile(const std::vector<gp_Pnt2d>& points)
