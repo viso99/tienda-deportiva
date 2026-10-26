@@ -25,3 +25,7 @@ Es un **programa de escritorio instalable**, no una app web.
 **D-5 · 2026-10-26 · vigente**
 La **primera versión** se centra en **boceto 2D con medidas → extrusión a pieza 3D**.
 *Por qué:* cubre 2D y 3D con una sola función y es el núcleo de cualquier CAD paramétrico.
+
+**D-6 · 2026-10-26 · vigente**
+Tecnología: **C++ con Qt** para la interfaz y **Open CASCADE** como motor geométrico. Build con **CMake**; dependencias en Windows con **vcpkg** (`vcpkg.json`).
+*Por qué:* Sergio eligió C++ por rendimiento. Se le recomendó Python + Qt + Open CASCADE, que llega antes a una versión funcionando, y prefirió C++. Open CASCADE porque hacer un motor geométrico propio es inviable.

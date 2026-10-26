@@ -5,9 +5,10 @@ Leé este archivo entero al empezar cada sesión. Es corto a propósito: dice qu
 ## Qué es este proyecto (en 30 segundos)
 
 - **Producto objetivo (confirmado por Sergio, 2026-10-26):** un programa de diseño CAD **de escritorio**, del estilo de SolidWorks, NX o AutoCAD, que hace **piezas 3D y planos 2D**, pensado para **otras personas y empresas**. La primera versión permite **dibujar un boceto 2D con medidas y extruirlo a una pieza 3D**. Detalle en [docs/producto.md](docs/producto.md).
-- **Código actual (verificado):** el repo todavía contiene **otra cosa**: una tienda web de demostración de ropa deportiva ("PROSPORT"), con 3 archivos estáticos. No tiene nada de CAD. Detalle en [docs/estado-actual.md](docs/estado-actual.md).
+- **Tecnología (confirmada):** C++, Qt y Open CASCADE, con CMake y vcpkg. Ver D-6 en [docs/decisiones.md](docs/decisiones.md).
+- **Código actual (verificado):** la app CAD está en sus primeros pasos, en `src/` (por ahora una ventana con vista 3D). En la raíz quedan además los 3 archivos de una **tienda web de demostración** anterior ("PROSPORT"), que no forma parte del producto. Detalle en [docs/estado-actual.md](docs/estado-actual.md).
 
-> ⚠️ El código de hoy **no** describe el producto que se quiere construir. No deduzcas requisitos del CAD a partir de la tienda, ni al revés.
+> ⚠️ La tienda (`index.html`, `styles.css`, `script.js`) **no** tiene relación con el CAD. No deduzcas requisitos del CAD a partir de ella, y no la toques hasta que Sergio decida qué hacer con ella.
 
 ## Mapa de la documentación
 
@@ -15,6 +16,7 @@ Leé este archivo entero al empezar cada sesión. Es corto a propósito: dice qu
 |---|---|---|
 | Qué se construye, para quién, alcance de la v1 | [docs/producto.md](docs/producto.md) | Antes de proponer o implementar cualquier funcionalidad |
 | Qué hay realmente en el repo hoy | [docs/estado-actual.md](docs/estado-actual.md) | Antes de tocar código existente |
+| Cómo compilar y probar | [docs/compilar.md](docs/compilar.md) | Antes de compilar, o para verificar un cambio |
 | Decisiones tomadas y por qué | [docs/decisiones.md](docs/decisiones.md) | Antes de cambiar rumbo, tecnología o alcance |
 | Preguntas abiertas y suposiciones | [docs/pendientes.md](docs/pendientes.md) | Antes de decidir algo que todavía no está cerrado |
 | Vocabulario CAD en lenguaje simple | [docs/glosario.md](docs/glosario.md) | Al hablar con Sergio o escribir documentación |
