@@ -1,6 +1,6 @@
 # Estado actual del código
 
-**[Verificado] 2026-10-26** leyendo el repo `viso99/tienda-deportiva`.
+**[Verificado] 2026-11-09** leyendo el repo `viso99/tienda-deportiva`.
 
 El repo tiene **dos cosas separadas**:
 
@@ -15,7 +15,7 @@ Hechos los pasos 2 (**ventana con vista 3D**), 3 (**boceto con medidas**) y 4 (*
 **Cotas editables (D-9, segunda parte):** [Verificado] 2026-10-26 en Linux y en Windows, junto con los arreglos de origen visible, cotas con coma y barra de estado.
 **Agujeros, cortes y salientes (D-10):** [Verificado] 2026-10-26 en Linux y en Windows.
 **Deshacer y rehacer (D-12):** [Verificado] 2026-10-26 en Linux y en Windows.
-**Instalador de Windows (D-13):** [Supuesto] reglas de instalación y paquetes en `CMakeLists.txt`; en Linux `cmake --install` y `cpack` funcionan (2026-11-09), en Windows todavía no se probó.
+**Instalador de Windows (D-13):** [Verificado] 2026-11-09 en Linux y en Windows: `cpack` arma el instalador `.exe` y el `.zip`, y se probó instalar, abrir, hacer una pieza y desinstalar. Ver [compilar.md](compilar.md).
 **Círculos y arcos (D-11):** [Verificado] 2026-10-26 en Linux y en Windows. Detalles vistos en Windows: las cotas de radio y diámetro se leen pero salen chicas, y la "R" usa otra letra que el resto; al elegir una cara, los agujeros de la pieza se ven como una cruz (ya pasaba con los bolsillos de D-10).
 
 | Archivo | Qué hace |
