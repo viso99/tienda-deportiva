@@ -34,6 +34,28 @@ Notas:
 - Las pruebas se corren con `ctest -C Release --output-on-failure` dentro de `build`. **[Verificado] 2026-10-26:** pasan en Windows con Open CASCADE 8.0.1, y el enlace con `TKDESTEP` (STEP en 7.8+, que `CMakeLists.txt` elige solo) funciona. Los menús de Archivo (Guardar como, Nuevo, Abrir, Exportar a STEP y el aviso de cambios sin guardar) también se probaron en Windows y funcionan. El dibujo con el mouse y las cotas editables (D-9) también se probaron en Windows y funcionan. Los agujeros, cortes y salientes (D-10) también se probaron en Windows y funcionan (bolsillo, saliente, agujero pasante, quitar la última operación, Esc, guardar y abrir la versión 3 del `.cadp` y exportar a STEP); suman las librerías `TKBO`, `TKBool`, `TKShHealing`, `TKG2d` y `TKGeomAlgo` de Open CASCADE, que enlazan sin problemas. Al compilar sale un único aviso: `Graphic3d_Vec2.hxx` está marcado como obsoleto desde Open CASCADE 8.0 (en `MainWindow.cpp`, `OccView.cpp` y el moc). No rompe nada. Los círculos y arcos (D-11) también se probaron en Windows y funcionan (círculo y cambio de diámetro, ranura con Línea y Arco, cambio de radio y radio rechazado, Retroceso y Enter, agujero redondo, saliente con arco, `.cadp` versión 4 y STEP); no suman librerías ni avisos al compilar. Deshacer y rehacer (D-12) también se probó en Windows y funciona (Ctrl+Z, Ctrl+Y y Ctrl+Mayús+Z sobre agujero, extrusión y cambio de cota, el `*` de cambios sin guardar, Ctrl+Z a mitad de un dibujo e historial nuevo al abrir); no suma librerías ni avisos.
 - **vcpkg instala Open CASCADE 8.0**, y en Linux se usa la 7.6. En la 8.0 algunos tipos ya no llegan incluidos de rebote por otros headers (por ejemplo `Graphic3d_Vec2i`, que necesita `#include <Graphic3d_Vec2.hxx>`). Incluí siempre de forma explícita los headers de lo que usás, y si un cambio compila en Linux pero toca la API de Open CASCADE, tené en cuenta que en Windows puede fallar.
 
+## Armar el instalador de Windows (D-13)
+
+**[Supuesto]** todavía no se probó en Windows. Hace falta, una sola vez, instalar **NSIS** (gratis, arma el `.exe` del instalador):
+
+```
+winget install --id NSIS.NSIS -e
+```
+
+Después de compilar (`cmake --build build --config Release`), dentro de `build`:
+
+```
+cpack -C Release
+```
+
+Deja en `build` dos archivos: `DisenoCAD-0.1.0-win64.exe` (el instalador) y `DisenoCAD-0.1.0-win64.zip` (la versión portátil). Llevan `CadApp.exe` con todas las DLL que necesita (Qt con sus plugins, Open CASCADE y el runtime de Visual C++), así que sirven en una PC sin nada instalado. Notas:
+
+- El instalador pide permiso de administrador, instala en `C:\Program Files\Diseño CAD` y agrega "Diseño CAD" al menú Inicio. Se desinstala desde Configuración → Aplicaciones. Si ya había una versión, ofrece desinstalarla primero.
+- Para ver qué se copia sin armar el instalador: `cmake --install build --config Release --prefix C:\temp\prueba-cad`.
+- Solo sirve con `--config Release` (las DLL se buscan en la carpeta Release de vcpkg).
+- Sin firma de código, Windows muestra "Windows protegió su PC" al abrir el instalador; se sigue con "Más información" → "Ejecutar de todas formas". Ver [pendientes.md](pendientes.md).
+- En Linux, `cpack` dentro de `build` arma un `.tar.gz` (solo para comprobar las reglas; no incluye las librerías).
+
 ## En Linux (lo usa Claude para verificar)
 
 **[Verificado] 2026-10-26** en Ubuntu 24.04 (Qt 6.4, Open CASCADE 7.6):

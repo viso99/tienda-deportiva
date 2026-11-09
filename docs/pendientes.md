@@ -15,4 +15,5 @@ Lo que **todavía no está decidido**. Nada de esta página es un hecho. Cuando 
 2. **Formatos de archivo:** el formato propio y STEP ya están (D-8). Faltan importar STEP y los formatos 2D (DXF/DWG) para cuando haya planos.
 3. **Alcance exacto de la v1** más allá de boceto → extrusión: ¿guardar y abrir?, ¿deshacer?, ¿cotas editables?, ¿exportar?
 4. **Modelo de negocio y licencia:** venta, suscripción, gratis o código abierto. Influye en qué librerías se pueden usar (por sus licencias).
-5. **Nombre del producto:** el repo se llama `tienda-deportiva` y la tienda dice "PROSPORT", y ninguno de los dos aplica. La extensión `.cadp` también es provisoria.
+5. **Nombre del producto:** el repo se llama `tienda-deportiva` y la tienda dice "PROSPORT", y ninguno de los dos aplica. La extensión `.cadp` también es provisoria, y el instalador (D-13) usa "Diseño CAD" de forma provisoria.
+6. **Antes de repartir el instalador (D-13) a más gente:** licencia de uso (hoy el instalador no muestra ninguna), ícono de la app (hoy usa el genérico de Windows) y firma de código (sin ella, Windows avisa "Windows protegió su PC" y hay que tocar "Más información" y "Ejecutar de todas formas"; la firma es un certificado pago).
