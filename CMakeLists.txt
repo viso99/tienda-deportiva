@@ -70,12 +70,14 @@ if(WIN32)
   # Las DLL de Open CASCADE y sus dependencias se buscan en la carpeta de vcpkg (solo la
   # versión Release: el instalador se arma con --config Release). Las de Windows no se copian.
   set(CAD_VCPKG_BIN "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin")
+  # El runtime de Visual C++ se saltea acá: lo copia InstallRequiredSystemLibraries (más abajo).
   install(TARGETS CadApp
-    RUNTIME DESTINATION .
     RUNTIME_DEPENDENCIES
       PRE_EXCLUDE_REGEXES "^api-ms-" "^ext-ms-"
+        "^[Vv][Cc][Rr][Uu][Nn][Tt][Ii][Mm][Ee]" "^[Mm][Ss][Vv][Cc][Pp]" "^[Cc][Oo][Nn][Cc][Rr][Tt]"
       POST_EXCLUDE_REGEXES "[/\\\\][Ss][Yy][Ss][Tt][Ee][Mm]32[/\\\\]" "[/\\\\][Ww][Ii][Nn][Dd][Oo][Ww][Ss][/\\\\]"
       DIRECTORIES "${CAD_VCPKG_BIN}"
+    RUNTIME DESTINATION .
   )
 
   # Qt necesita además sus plugins (por ejemplo platforms/qwindows.dll): eso lo copia windeployqt,
@@ -100,6 +102,8 @@ if(WIN32)
   set(CPACK_NSIS_DISPLAY_NAME "${CAD_PRODUCT_NAME} ${PROJECT_VERSION}")
   set(CPACK_NSIS_INSTALL_ROOT "$PROGRAMFILES64")
   set(CPACK_NSIS_INSTALLED_ICON_NAME "CadApp.exe")
+  # El acceso del menú Inicio apunta a la carpeta de instalación (CPack usa bin\ si no).
+  set(CPACK_NSIS_EXECUTABLES_DIRECTORY ".")
   set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
   set(CPACK_NSIS_MANIFEST_DPI_AWARE ON)
   # Sin página de licencia hasta que se decida una (si no, CPack muestra la de CMake).
