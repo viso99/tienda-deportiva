@@ -36,7 +36,7 @@ Notas:
 
 ## Armar el instalador de Windows (D-13)
 
-**[Supuesto]** todavía no se probó en Windows. Hace falta, una sola vez, instalar **NSIS** (gratis, arma el `.exe` del instalador):
+**[Verificado] 2026-11-09** en la PC de Sergio (CMake 3.31.6, NSIS 3.13): el instalador se arma, instala en `C:\Program Files\Diseño CAD` (64 archivos, 118 MB), el acceso del menú Inicio abre la app, la pieza 40 × 20 × 10 funciona y la desinstalación no deja nada. El `.zip` también abre y extruye. El `.exe` pesa 35 MB y el `.zip` 48 MB. Hace falta, una sola vez, instalar **NSIS** (gratis, arma el `.exe` del instalador):
 
 ```
 winget install --id NSIS.NSIS -e
@@ -54,6 +54,8 @@ Deja en `build` dos archivos: `DisenoCAD-0.1.0-win64.exe` (el instalador) y `Dis
 - Para ver qué se copia sin armar el instalador: `cmake --install build --config Release --prefix C:\temp\prueba-cad`.
 - Solo sirve con `--config Release` (las DLL se buscan en la carpeta Release de vcpkg).
 - Sin firma de código, Windows muestra "Windows protegió su PC" al abrir el instalador; se sigue con "Más información" → "Ejecutar de todas formas". Ver [pendientes.md](pendientes.md).
+- Conviene dejar la carpeta que propone. Si al instalar con otra cuenta de administrador se elige una carpeta personal de esa cuenta (por ejemplo `C:\Users\Usuario\...`), las otras cuentas no pueden abrir la app ni desinstalarla desde Configuración.
+- Detalles conocidos: el aviso de "ya está instalado" sale en inglés (es el texto que trae CPack), y la ventana de la app arranca más grande que una pantalla de 1536 × 864 (1920 × 1080 al 125 %).
 - En Linux, `cpack` dentro de `build` arma un `.tar.gz` (solo para comprobar las reglas; no incluye las librerías).
 
 ## En Linux (lo usa Claude para verificar)
